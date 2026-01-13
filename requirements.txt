@@ -1,0 +1,5 @@
+librosa
+numpy
+mir_eval
+matplotlib
+scipy
