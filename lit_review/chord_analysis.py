@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import mir_eval
 import os
 import json
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
 
 #configuration
 #preferred local paths for the requested test
@@ -167,7 +169,48 @@ def main():
     plt.tight_layout()
     plt.savefig('chord_analysis_results.png')
     print("\nvisualisation saved to chord_analysis_results.png")
+
+    # generate confusion matrix for pipeline B
+    # first, we need frame-wise ground truth labels for comparison
+    frame_centers = (times[:-1] + times[1:]) / 2
+    ref_labels_frames = mir_eval.util.interpolate_intervals(ref_intervals, ref_labels, frame_centers, fill_value='N')
+    
+    plot_confusion_matrix(ref_labels_frames, labels_B)
+    
     plt.show()
+
+def plot_confusion_matrix(ref_labels, est_labels):
+    """
+    visualises classification errors using a confusion matrix.
+    filters for common chords and normalises by true class.
+    """
+    common_chords = ['C:maj', 'G:maj', 'A:min', 'E:min', 'F:maj', 'D:min']
+    
+    # filter both lists based on common_chords being the ground truth
+    ref_filtered = []
+    est_filtered = []
+    for r, e in zip(ref_labels, est_labels):
+        if r in common_chords:
+            ref_filtered.append(r)
+            est_filtered.append(e)
+            
+    if not ref_filtered:
+        print("warning: no common chords found in the ground truth for confusion matrix.")
+        return
+
+    # compute confusion matrix
+    cm = confusion_matrix(ref_filtered, est_filtered, labels=common_chords, normalize='true')
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(cm, annot=True, fmt='.2f', cmap='Blues', 
+                xticklabels=common_chords, yticklabels=common_chords)
+    plt.title('confusion matrix (normalised) - pipeline B')
+    plt.xlabel('Predicted')
+    plt.ylabel('Ground Truth')
+    
+    plt.tight_layout()
+    plt.savefig('confusion_matrix_B.png')
+    print("\nconfusion matrix saved to confusion_matrix_B.png")
 
 if __name__ == "__main__":
     main()

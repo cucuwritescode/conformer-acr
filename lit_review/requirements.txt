@@ -3,3 +3,5 @@ numpy
 mir_eval
 matplotlib
 scipy
+scikit-learn
+seaborn
