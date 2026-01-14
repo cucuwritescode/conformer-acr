@@ -144,10 +144,10 @@ def main():
     score_B = mir_eval.chord.evaluate(ref_intervals, ref_labels, est_int_B, labels_B)
 
     print("\n" + "="*20)
-    print("EVALUATION RESULTS")
+    print("EVALUATION RESULTS: ACCURACY")
     print("="*20)
-    print(f"pipeline A (fixed-frame) weighted accuracy (Mirex): {score_A['mirex']:.4f}")
-    print(f"pipeline B (segmentation) weighted accuracy (Mirex): {score_B['mirex']:.4f}")
+    print(f"pipeline A (fixed-frame) weighted accuracy (WCSR): {score_A['mirex']:.4f}")
+    print(f"pipeline B (segmentation) weighted accuracy (WCSR): {score_B['mirex']:.4f}")
     print("="*20)
 
     #visualisation
