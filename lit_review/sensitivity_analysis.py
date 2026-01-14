@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import mir_eval
 from scipy.spatial.distance import cosine
 
-#CONFIGURATION
+#configuration
 AUDIO_FOLDER = 'audio_dataset/'
 JAMS_FOLDER = 'msaf-data/Isophonics/references/'
 THRESHOLDS = [0.5, 1.0, 2.0, 3.0, 4.0, 5.0]
@@ -65,10 +65,17 @@ def load_jams_chords(jams_path):
             labels.append(reduce_chord(val))
     return np.array(intervals), labels
 
-def classify_frame(chroma_vec):
+def classify_frame(chroma_vec, bass_chroma_vec=None, bass_weight=0.1):
     best_chord, max_sim = None, -1
-    for label, template in TEMPLATES.items():
+    #TEMPLATES is a dictionary
+    for i, (label, template) in enumerate(TEMPLATES.items()):
         sim = 1 - cosine(chroma_vec + 1e-10, template + 1e-10)
+        
+        #add bass weight if applicable
+        if bass_chroma_vec is not None:
+            root_idx = i % 12
+            sim += bass_weight * bass_chroma_vec[root_idx]
+            
         if sim > max_sim:
             max_sim, best_chord = sim, label
     return best_chord
@@ -93,7 +100,18 @@ def main():
             
         print(f"processing {audio_name}...")
         y, sr = librosa.load(audio_path, sr=SR)
-        chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=HOP_LENGTH)
+        
+        #apply HPSS to filter out percussion noise
+        y_harmonic = librosa.effects.harmonic(y)
+        
+        #estimate tuning for better chroma mapping
+        tuning = librosa.estimate_tuning(y=y_harmonic, sr=sr)
+        
+        chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr, hop_length=HOP_LENGTH, tuning=tuning)
+        bass_chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr, hop_length=HOP_LENGTH, 
+                                                tuning=tuning, fmin=librosa.note_to_hz('C1'), 
+                                                n_octaves=3)
+        
         ref_int, ref_labs = load_jams_chords(jams_path)
         
         duration = librosa.get_duration(y=y, sr=sr)
@@ -101,10 +119,10 @@ def main():
         times[-1] = min(times[-1], duration)
         est_int = np.vstack([times[:-1], times[1:]]).T
         
-        onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
+        onset_env = librosa.onset.onset_strength(y=y_harmonic, sr=sr, hop_length=HOP_LENGTH)
         
         for t in THRESHOLDS:
-            # sweep threshold
+            #sweep threshold
             onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, hop_length=HOP_LENGTH, pre_max=t, post_max=t)
             onsets = np.unique(np.concatenate(([0], onsets, [chroma.shape[1]])))
             
@@ -113,7 +131,8 @@ def main():
                 start, end = int(onsets[i]), int(onsets[i+1])
                 if start >= end: continue
                 segment_avg = np.mean(chroma[:, start:end], axis=1)
-                chord = classify_frame(segment_avg)
+                segment_bass = np.mean(bass_chroma[:, start:end], axis=1)
+                chord = classify_frame(segment_avg, segment_bass)
                 est_labs.extend([chord] * (end-start))
             
             score = mir_eval.chord.evaluate(ref_int, ref_labs, est_int, est_labs)

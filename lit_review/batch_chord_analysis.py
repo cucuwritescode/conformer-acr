@@ -38,44 +38,59 @@ def get_chroma(audio_path):
     chroma = librosa.feature.chroma_cqt(C=cqt, n_chroma=12, n_octaves=7)
     return chroma, y, sr
 
-def classify_frame(chroma_vec):
+def classify_frame(chroma_vec, bass_chroma_vec=None, bass_weight=0.1):
     """
-    classifies a single chroma vector based on cosine similarity.
+    performs classification using cosine similarity with optional bass weighting.
     """
-    best_chord = None
-    max_sim = -1
-    for label, template in TEMPLATES.items():
-        #cosine similarity calculation (1 - cosine distance)
-        #adding small epsilon to avoid division by zero
+    best_chord, max_sim = None, -1
+    for i, (label, template) in enumerate(TEMPLATES.items()):
         sim = 1 - cosine(chroma_vec + 1e-10, template + 1e-10)
+        
+        #add bass weight if applicable
+        #templates are sorted: index 0-11 are Maj, 12-23 are Min
+        if bass_chroma_vec is not None:
+            root_idx = i % 12
+            sim += bass_weight * bass_chroma_vec[root_idx]
+            
         if sim > max_sim:
-            max_sim = sim
-            best_chord = label
+            max_sim, best_chord = sim, label
     return best_chord
 
 def evaluate_track(file_path):
     """
-    analyses a single track through both pipelines and calculates stability.
+    analyzes a single track through both pipelines and calculates stability.
     """
+    #load and separate harmonic component
+    y, sr = librosa.load(file_path, sr=SR)
+    y_harmonic = librosa.effects.harmonic(y)
+
+    #estimate tuning for better alignment
+    tuning = librosa.estimate_tuning(y=y_harmonic, sr=sr)
+    
+    #feature extraction
+    chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr, hop_length=HOP_LENGTH, tuning=tuning)
+    bass_chroma = librosa.feature.chroma_cqt(y=y_harmonic, sr=sr, hop_length=HOP_LENGTH, 
+                                            tuning=tuning, fmin=librosa.note_to_hz('C1'), 
+                                            n_octaves=3)
+    
     #pipeline A (fixed-frame)
-    chroma, y, sr = get_chroma(file_path)
-    est_a = [classify_frame(c) for c in chroma.T]
+    est_a = [classify_frame(c, b) for c, b in zip(chroma.T, bass_chroma.T)]
     
     #pipeline B (segmentation-based)
     #simple onset detection (spectral flux simulation)
-    onset_env = librosa.onset.onset_strength(y=y, sr=sr, hop_length=HOP_LENGTH)
+    onset_env = librosa.onset.onset_strength(y=y_harmonic, sr=sr, hop_length=HOP_LENGTH)
     onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, hop_length=HOP_LENGTH, units='frames')
     onsets = np.concatenate(([0], onsets, [chroma.shape[1]]))
     
     est_b = []
     for i in range(len(onsets)-1):
-        start, end = int(onsets[i]), int(onsets[i+1])
-        if start >= end: continue
-        #average pooling for the segment
-        segment = np.mean(chroma[:, start:end], axis=1)
-        chord = classify_frame(segment)
-        #broadcast result back to all frames in the segment
-        est_b.extend([chord] * (end-start))
+        idx = np.arange(int(onsets[i]), int(onsets[i+1]))
+        if len(idx) == 0: continue
+        #average chroma for segment
+        segment_chroma = np.mean(chroma[:, idx], axis=1)
+        segment_bass = np.mean(bass_chroma[:, idx], axis=1)
+        chord = classify_frame(segment_chroma, segment_bass)
+        est_b.extend([chord] * len(idx))
         
     def calculate_stability(seq):
         """
