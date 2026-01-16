@@ -226,7 +226,11 @@ def main():
 
     configs = [
         ("Baseline", False, False, 0.0, False, False, False),
-        ("+HPSS+Tuning+BassCue", True, True, best_alpha, False, False, False),
+        ("+HPSS", True, False, 0.0, False, False, False),
+        ("+Tuning", False, True, 0.0, False, False, False),
+        ("+HPSS+Tuning", True, True, 0.0, False, False, False),
+        ("+BassWeighting", False, False, best_alpha, False, False, False),
+        ("+HPSS+Tuning+BassWeighting", True, True, best_alpha, False, False, False),
         ("+LogComp", True, True, best_alpha, False, False, True),
         ("+HarmTempl", True, True, best_alpha, True, False, True),
         ("FMP_FINAL (Viterbi)", True, True, best_alpha, True, True, True)
@@ -247,11 +251,11 @@ def main():
     print(summary)
     
     #impact analysis
-    c_prev = df[df['Config'] == '+HPSS+Tuning+BassCue'].set_index('Track')
+    c_prev = df[df['Config'] == '+HPSS+Tuning+BassWeighting'].set_index('Track')
     c_final = df[df['Config'] == 'FMP_FINAL (Viterbi)'].set_index('Track')
     diff = c_final['WCSR'] - c_prev['WCSR']
     
-    print("\nFMP SYSTEM IMPACT ANALYSIS (vs HPSS+Tuning+Bass)")
+    print("\nFMP SYSTEM IMPACT ANALYSIS (vs HPSS+Tuning+BassWeighting)")
     print(f"Improved on {(diff > 0).sum()}/12, Degraded on {(diff < 0).sum()}/12")
     print("\nTop 3 Winners:")
     print(diff.sort_values(ascending=False).head(3))
