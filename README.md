@@ -1,6 +1,6 @@
 # conformer-acr
 
-## Deep Learning Models for Automatic Chord Recognition in Polyphonic Audio, N8 CiR Bede Supercomputer studentship.
+## Deep Learning Models for Automatic Chord Recognition in Polyphonic Audio, N8 CiR Bede Supercomputer Studentship.
 
 ## Install
 
