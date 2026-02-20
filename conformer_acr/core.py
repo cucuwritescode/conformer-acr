@@ -14,33 +14,27 @@ from typing import List
 import numpy as np
 import torch
 
-from conformer_acr.config import SR
-from conformer_acr.data.preprocess import compute_cqt, load_audio
+from conformer_acr.data.preprocess import extract_cqt
 from conformer_acr.models.conformer import ConformerACR
 from conformer_acr.theory.vocabulary import index_to_chord
 
 
 def preprocess_audio(
     path: str | Path,
-    sr: int = SR,
-) -> np.ndarray:
+) -> torch.Tensor:
     """Load audio and extract CQT features ready for the model.
 
     Parameters
     ----------
     path : str | Path
         Path to an audio file.
-    sr : int
-        Target sample rate.
 
     Returns
     -------
-    np.ndarray, shape ``(n_bins, n_frames)``
-        CQT magnitude spectrogram.
+    torch.Tensor, shape ``(Time, Freq_Bins)``
+        Log-scaled CQT magnitude spectrogram.
     """
-    y, sr_out = load_audio(path, sr=sr)
-    cqt = compute_cqt(y, sr_out)
-    return cqt
+    return extract_cqt(str(path))
 
 
 def predict(
@@ -75,10 +69,11 @@ def predict(
             model.load_state_dict(state["model_state_dict"])
     model = model.to(device).eval()
 
+    # extract_cqt returns (Time, Freq_Bins) as a torch.Tensor
     cqt = preprocess_audio(audio_path)
 
-    # (n_bins, n_frames) → (1, n_frames, n_bins) for batch-first encoder
-    x = torch.from_numpy(cqt.T).unsqueeze(0).float().to(device)
+    # Add batch dimension: (Time, Freq_Bins) → (1, Time, Freq_Bins)
+    x = cqt.unsqueeze(0).float().to(device)
 
     with torch.no_grad():
         out = model(x)
@@ -88,3 +83,4 @@ def predict(
     #       For now, return root-only labels.
     chords: List[str] = [index_to_chord(int(idx)) for idx in root_ids]
     return chords
+
