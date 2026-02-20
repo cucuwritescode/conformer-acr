@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from conformer_acr.data.preprocess import compute_cqt, load_audio
+from conformer_acr.data.preprocess import extract_cqt
 from conformer_acr.theory.vocabulary import chord_to_index
 
 
@@ -47,13 +47,12 @@ class AAMDataset(Dataset):  # type: ignore[type-arg]
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
         audio_path, ann_path = self._index[idx]
-        y, sr = load_audio(audio_path)
-        cqt = compute_cqt(y, sr)
+        cqt = extract_cqt(str(audio_path))  # (Time, Freq_Bins)
         # TODO: Parse JAMS annotations → target tensors.
-        target = np.zeros(cqt.shape[1], dtype=np.int64)
+        target = torch.zeros(cqt.shape[0], dtype=torch.long)
         return {
-            "cqt": torch.from_numpy(cqt),
-            "target": torch.from_numpy(target),
+            "cqt": cqt,
+            "target": target,
         }
 
 
@@ -83,11 +82,11 @@ class IsophonicsDataset(Dataset):  # type: ignore[type-arg]
 
     def __getitem__(self, idx: int) -> dict[str, Any]:
         audio_path, lab_path = self._index[idx]
-        y, sr = load_audio(audio_path)
-        cqt = compute_cqt(y, sr)
+        cqt = extract_cqt(str(audio_path))  # (Time, Freq_Bins)
         # TODO: Parse .lab annotations → target tensors.
-        target = np.zeros(cqt.shape[1], dtype=np.int64)
+        target = torch.zeros(cqt.shape[0], dtype=torch.long)
         return {
-            "cqt": torch.from_numpy(cqt),
-            "target": torch.from_numpy(target),
+            "cqt": cqt,
+            "target": target,
         }
+

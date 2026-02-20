@@ -2,115 +2,106 @@
 conformer_acr.data.preprocess
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-audio loading and CQT feature extraction.
-thin, typed wrappers around :mod:`librosa` so the rest of the
-library never calls librosa directly.
+Audio loading and CQT feature extraction for the Conformer ACR model.
+
+Handles the heavy DSP lifting: loads raw audio, computes Constant-Q Transform
+spectrograms with 252 frequency bins (36 per octave × 7 octaves), and formats
+the output as PyTorch tensors ready for the Conformer.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import librosa
 import numpy as np
+import librosa
+import torch
+from typing import Tuple
 
-from conformer_acr.config import FMIN, HOP_LENGTH, N_CQT_BINS, N_OCTAVES, SR
+from conformer_acr.config import (
+    BINS_PER_OCTAVE,
+    FMIN,
+    HOP_LENGTH,
+    N_CQT_BINS,
+    SR,
+)
+
+#re-export config constants for convenience / backward compat
+SAMPLE_RATE = SR
+N_BINS = N_CQT_BINS
 
 
-def load_audio(
-    path: str | Path,
-    sr: int = SR,
-    mono: bool = True,
-) -> tuple[np.ndarray, int]:
-    """load an audio file and resample to *sr* Hz.
+def extract_cqt(audio_path: str) -> torch.Tensor:
+    """
+    Load an audio file and compute the Constant-Q Transform (CQT) spectrogram.
 
-    parameters
+    This is the primary feature-extraction entry point for training and
+    inference.  It produces a log-scaled magnitude CQT with 252 frequency bins
+    (36 bins per octave across 7 octaves), matching the ``input_dim=252``
+    expected by :class:`~conformer_acr.models.ConformerACR`.
+
+    Parameters
     ----------
-    path : str | Path
-        path to any format supported by ``soundfile`` / ``audioread``.
-    sr : int
-        target sample rate (default: :data:`conformer_acr.config.SR`).
-    mono : bool
-        down-mix to mono if *True*.
+    audio_path : str
+        Path to the ``.wav`` or ``.mp3`` file.
 
     Returns
     -------
-    y : np.ndarray, shape ``(n_samples,)``
-        Audio time-series.
-    sr : int
-        Actual sample rate (always equals the requested *sr*).
+    torch.Tensor
+        CQT magnitude spectrogram of shape ``(Time, Freq_Bins)``.
+
+    Notes
+    -----
+    * 36 bins per octave gives 3 bins per semitone — mandatory for chord
+      recognition so the model can distinguish slight detuning from actual
+      harmonic shifts.
+    * ``amplitude_to_db`` compresses dynamic range, preventing loud transients
+      from masking quieter harmonic content (e.g. bass notes under drum hits).
     """
-    y, sr_out = librosa.load(str(path), sr=sr, mono=mono)
-    return y, sr_out
+    # load audio
+    # librosa automatically resamples to SAMPLE_RATE and converts to mono
+    y, sr = librosa.load(audio_path, sr=SAMPLE_RATE, mono=True)
 
-
-def compute_cqt(
-    y: np.ndarray,
-    sr: int = SR,
-    hop_length: int = HOP_LENGTH,
-    n_bins: int = N_CQT_BINS,
-    fmin: float = FMIN,
-) -> np.ndarray:
-    """compute the Constant-Q Transform magnitude spectrogram.
-
-    parameters
-    ----------
-    y : np.ndarray
-        audio time-series (mono).
-    sr : int
-        sample rate.
-    hop_length : int
-        hop between successive CQT frames.
-    n_bins : int
-        total number of CQT frequency bins.
-    fmin : float
-        minimum frequency (Hz).
-
-    returns
-    -------
-    np.ndarray, shape ``(n_bins, n_frames)``
-        magnitude CQT spectrogram.
-    """
-    cqt: np.ndarray = np.abs(
-        librosa.cqt(
-            y=y,
-            sr=sr,
-            hop_length=hop_length,
-            n_bins=n_bins,
-            fmin=fmin,
-        )
-    )
-    return cqt
-
-
-def compute_chroma_cqt(
-    y: np.ndarray,
-    sr: int = SR,
-    hop_length: int = HOP_LENGTH,
-    n_octaves: int = N_OCTAVES,
-) -> np.ndarray:
-    """compute a CQT-based chromagram.
-
-    parameters
-    ----------
-    y : np.ndarray
-        audio time-series (mono).
-    sr : int
-        sample rate.
-    hop_length : int
-        hop between successive frames.
-    n_octaves : int
-        number of octaves spanned.
-
-    returns
-    -------
-    np.ndarray, shape ``(12, n_frames)``
-        chromagram normalised per-frame.
-    """
-    chroma: np.ndarray = librosa.feature.chroma_cqt(
-        y=y,
+    # compute CQT
+    # minimum frequency of C1 (≈ 32.7 Hz)
+    C = librosa.cqt(
+        y,
         sr=sr,
-        hop_length=hop_length,
-        n_octaves=n_octaves,
+        hop_length=HOP_LENGTH,
+        fmin=librosa.note_to_hz('C1'),
+        n_bins=N_BINS,
+        bins_per_octave=BINS_PER_OCTAVE,
     )
-    return chroma
+
+    # magnitude and log scaling
+    # neural networks prefer log-scaled inputs rather than raw amplitudes
+    C_mag = np.abs(C)
+    C_db = librosa.amplitude_to_db(C_mag, ref=np.max)
+
+    # format for pytorch
+    # PyTorch sequence models expect (Batch, Time, Features).
+    # librosa outputs (Features, Time), so transpose here.
+    cqt_tensor = torch.from_numpy(C_db).T
+
+    return cqt_tensor
+
+
+def get_time_frames(audio_length_samples: int) -> np.ndarray:
+    """Map CQT frame indices back to actual timestamps (seconds).
+
+    Useful during evaluation to align predicted chords with ground-truth
+    annotations that are specified in seconds.
+
+    Parameters
+    ----------
+    audio_length_samples : int
+        Length of the original audio signal in samples.
+
+    Returns
+    -------
+    np.ndarray
+        Array of timestamps (in seconds) for each CQT frame.
+    """
+    return librosa.frames_to_time(
+        np.arange(audio_length_samples // HOP_LENGTH + 1),
+        sr=SAMPLE_RATE,
+        hop_length=HOP_LENGTH,
+    )

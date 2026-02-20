@@ -42,7 +42,7 @@ from conformer_acr.models.conformer import ConformerACR
 
 # ── Data ─────────────────────────────────────────────────────────────
 from conformer_acr.data.dataset import AAMDataset, IsophonicsDataset
-from conformer_acr.data.preprocess import compute_chroma_cqt, compute_cqt, load_audio
+from conformer_acr.data.preprocess import extract_cqt, get_time_frames
 
 # ── Theory ───────────────────────────────────────────────────────────
 from conformer_acr.theory.vocabulary import (
@@ -58,7 +58,7 @@ from conformer_acr.training.losses import FocalLoss
 from conformer_acr.training.trainer import Trainer
 
 # ── Config (re-export constants for convenience) ─────────────────────
-from conformer_acr.config import HOP_LENGTH, N_CQT_BINS, SR
+from conformer_acr.config import BINS_PER_OCTAVE, HOP_LENGTH, N_CQT_BINS, SR
 
 __all__: list[str] = [
     # pipeline
@@ -69,9 +69,8 @@ __all__: list[str] = [
     # data
     "AAMDataset",
     "IsophonicsDataset",
-    "load_audio",
-    "compute_cqt",
-    "compute_chroma_cqt",
+    "extract_cqt",
+    "get_time_frames",
     # theory
     "CHORD_LABELS",
     "ROOT_LABELS",
@@ -85,4 +84,5 @@ __all__: list[str] = [
     "SR",
     "HOP_LENGTH",
     "N_CQT_BINS",
+    "BINS_PER_OCTAVE",
 ]
