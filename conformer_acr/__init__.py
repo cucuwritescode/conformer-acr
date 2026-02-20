@@ -41,7 +41,7 @@ from conformer_acr.core import predict, preprocess_audio
 from conformer_acr.models.conformer import ConformerACR
 
 # ── Data ─────────────────────────────────────────────────────────────
-from conformer_acr.data.dataset import AAMDataset, IsophonicsDataset
+from conformer_acr.data.dataset import AAMDataset, pad_collate_fn
 from conformer_acr.data.preprocess import extract_cqt, get_time_frames
 
 # ── Theory ───────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ __all__: list[str] = [
     "ConformerACR",
     # data
     "AAMDataset",
-    "IsophonicsDataset",
+    "pad_collate_fn",
     "extract_cqt",
     "get_time_frames",
     # theory

@@ -51,8 +51,8 @@ class Trainer:
 
     def fit(
         self,
-        train_loader: DataLoader,  # type: ignore[type-arg]
-        val_loader: DataLoader | None = None,  # type: ignore[type-arg]
+        train_loader: DataLoader,  #type: ignore[type-arg]
+        val_loader: DataLoader | None = None,  #type: ignore[type-arg]
         epochs: int = 10,
     ) -> dict[str, list[float]]:
         """Run the full training loop.

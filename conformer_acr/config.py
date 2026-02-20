@@ -32,7 +32,7 @@ N_OCTAVES: Final[int] = 7
 FMIN: Final[float] = 32.70
 """Lowest CQT frequency in Hz (C1 ≈ 32.70 Hz)."""
 
-# ── Model ────────────────────────────────────────────────────────────
+#model ────────────────────────────────────────────────────────────
 NUM_ROOTS: Final[int] = 12
 """Number of root pitch classes."""
 
