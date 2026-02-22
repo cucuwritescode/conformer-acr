@@ -33,11 +33,11 @@ FMIN: Final[float] = 32.70
 """Lowest CQT frequency in Hz (C1 ≈ 32.70 Hz)."""
 
 #model ────────────────────────────────────────────────────────────
-NUM_ROOTS: Final[int] = 12
-"""Number of root pitch classes."""
+NUM_ROOTS: Final[int] = 13
+"""Number of root pitch classes (12 + No Chord)."""
 
-NUM_QUALITIES: Final[int] = 12
-"""Number of chord quality classes (maj, min, 7, maj7, min7, …)."""
+NUM_QUALITIES: Final[int] = 15
+"""Number of chord quality classes (maj, min, dim, aug, maj7, min7, 7, dim7, hdim7, sus2, sus4, maj6, min6, 9, N)."""
 
 NUM_BASS: Final[int] = 13
 """Number of bass classes (12 pitch classes + no-bass)."""
