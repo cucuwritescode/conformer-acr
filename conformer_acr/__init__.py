@@ -47,9 +47,11 @@ from conformer_acr.data.preprocess import extract_cqt, get_time_frames
 # ── Theory ───────────────────────────────────────────────────────────
 from conformer_acr.theory.vocabulary import (
     CHORD_LABELS,
+    PITCH_CLASSES,
     ROOT_LABELS,
     chord_to_index,
     index_to_chord,
+    parse_chord_string,
     reduce_chord,
 )
 
@@ -73,9 +75,11 @@ __all__: list[str] = [
     "get_time_frames",
     # theory
     "CHORD_LABELS",
+    "PITCH_CLASSES",
     "ROOT_LABELS",
     "chord_to_index",
     "index_to_chord",
+    "parse_chord_string",
     "reduce_chord",
     # training
     "FocalLoss",

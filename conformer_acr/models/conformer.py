@@ -22,8 +22,8 @@ class ConformerACR(nn.Module):
     1. Linear projection of CQT input to ``d_model``
     2. Stack of Conformer encoder layers
     3. Three independent classification heads:
-       - **root**    → 12-class softmax (C, C♯, …, B)
-       - **quality** → N-class softmax  (maj, min, 7, …)
+       - **root**    → 13-class softmax (C, C♯, …, B, N)
+       - **quality** → 15-class softmax  (maj, min, dim, …, N)
        - **bass**    → 13-class softmax (12 pitch classes + no-bass)
 
     Parameters
