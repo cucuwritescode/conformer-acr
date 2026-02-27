@@ -7,7 +7,7 @@
 #editable install (for development)
 pip install -e .
 
-#with dev tools (pytest, black, flake8)
+#with dev tools (pytest, etc)
 pip install -e ".[dev]"
 ```
 
