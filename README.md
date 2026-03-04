@@ -1,6 +1,9 @@
-# Conformer-acr
 
-Transformer + CNN
+# Conformer-Based Long-Tail Automatic Chord Recognition
+
+
+
+
 ## Install
 
 ```bash
