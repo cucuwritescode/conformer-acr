@@ -1,4 +1,7 @@
 # Conformer-Based Long-Tail Automatic Chord Recognition
+<p align="center">
+  <img width="300" height="200" alt="acr_with_Bede" src="https://github.com/user-attachments/assets/bdc8a0db-21ea-4e9d-9b2b-947a5cf23df0" />
+</p>
 
 <p align="center">
     <a href="https://www.python.org/downloads/"><img alt="Python" src="https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white"></a>
@@ -11,7 +14,7 @@
 This library implements a multi-headed Conformer network designed to solve the "long-tail" problem in Automatic Chord Recognition (ACR).
 
 <p align="center">
-  <img width="500" alt="Architecture Diagram" src="https://github.com/user-attachments/assets/2f7dbddb-84fc-4edd-8163-e88447432c65" />
+  <img width="300" alt="Architecture Diagram" src="https://github.com/user-attachments/assets/2f7dbddb-84fc-4edd-8163-e88447432c65" />
   <br>
   <em>Figure 1: The multi-headed Conformer architecture branching into Root, Bass, and Quality predictions.</em>
 </p>
