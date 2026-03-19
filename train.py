@@ -21,7 +21,7 @@ from torch.utils.data import DataLoader
 from conformer_acr.models.conformer import ConformerACR
 from conformer_acr.training.trainer import Trainer
 from conformer_acr.training.losses import FocalLoss
-from conformer_acr.data.dataset import AAMDataset, pad_collate_fn
+from conformer_acr.data.dataset import AAMDataset, pad_collate_fn, load_labels
 
 
 # ============================================================================
@@ -167,7 +167,7 @@ def scan_dataset_for_vocab(
         for _, row in metadata.iterrows():
             label_path = os.path.join(data_dir, row["label_file"])
             if os.path.exists(label_path):
-                label_df = pd.read_csv(label_path)
+                label_df = load_labels(label_path)
                 if 'chord' in label_df.columns:
                     for chord in label_df['chord'].unique():
                         chord = str(chord).strip()
