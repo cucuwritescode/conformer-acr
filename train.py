@@ -91,11 +91,12 @@ class VocabMapper:
         if '/' in chord_str:
             chord_str, bass_note = chord_str.rsplit('/', 1)
 
-        #parse root and quality
-        if ':' in chord_str:
-            root_str, quality_str = chord_str.split(':', 1)
+        #parse root and quality (handles C:maj or Cmaj notation)
+        match = re.match(r'([A-G][#b]?):?(.*)', chord_str)
+        if match:
+            root_str = match.group(1)
+            quality_str = match.group(2) if match.group(2) else 'maj'
         else:
-            #just a root note, assume major
             root_str = chord_str
             quality_str = 'maj'
 
@@ -176,14 +177,14 @@ def scan_dataset_for_vocab(
                         #extract quality from chord string
                         if chord == 'N' or chord.lower() == 'n' or chord == '':
                             all_qualities.add('N')
-                        elif ':' in chord:
-                            #handle slash chords
-                            chord_part = chord.split('/')[0] if '/' in chord else chord
-                            _, quality = chord_part.split(':', 1)
-                            all_qualities.add(quality)
                         else:
-                            #just a root note, assume major
-                            all_qualities.add('maj')
+                            #handle both C:maj and Cmaj notation
+                            chord_part = chord.split('/')[0] if '/' in chord else chord
+                            match = re.match(r'([A-G][#b]?):?(.*)', chord_part)
+                            if match and match.group(2):
+                                all_qualities.add(match.group(2))
+                            else:
+                                all_qualities.add('maj')
 
     print(f"  Found {len(all_chords)} unique chord labels", flush=True)
     print(f"  Found {len(all_qualities)} unique qualities: {sorted(all_qualities)}", flush=True)
