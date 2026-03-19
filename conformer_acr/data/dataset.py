@@ -17,7 +17,6 @@ Supports:
 from __future__ import annotations
 
 import os
-import re
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -29,10 +28,10 @@ from conformer_acr.data.preprocess import extract_cqt
 
 def parse_arff(filepath: str) -> pd.DataFrame:
     """
-    Parse an ARFF file into a pandas DataFrame.
+    Parse a beatinfo ARFF file into a pandas DataFrame.
 
-    Expects an ARFF file with attributes for start time, end time, and chord label.
-    Common attribute names: start, end, chord, label, start_time, end_time, etc.
+    Beatinfo files have 4 columns: start_time, bar_count, quarter_count, chord.
+    End times are calculated dynamically from the next chord's start time.
 
     Parameters
     ----------
@@ -44,94 +43,37 @@ def parse_arff(filepath: str) -> pd.DataFrame:
     pd.DataFrame
         DataFrame with columns: start_time, end_time, chord
     """
-    attributes = []
     data_rows = []
-    in_data_section = False
+    in_data = False
 
     with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
         for line in f:
             line = line.strip()
-
-            #skip empty lines and comments
-            if not line or line.startswith('%'):
+            if not line or line.startswith('%') or line.lower().startswith('@'):
+                if line.lower().startswith('@data'):
+                    in_data = True
                 continue
+            if in_data:
+                parts = line.split(',')
+                if len(parts) >= 4:
+                    try:
+                        start_time = float(parts[0])
+                        #chord is always the last column in beatinfo
+                        chord = parts[-1].strip().strip("'\"")
+                        data_rows.append([start_time, chord])
+                    except ValueError:
+                        pass
 
-            #parse attribute declarations
-            if line.lower().startswith('@attribute'):
-                #extract attribute name (handles quoted names)
-                match = re.match(r"@attribute\s+['\"]?(\w+)['\"]?\s+", line, re.IGNORECASE)
-                if match:
-                    attributes.append(match.group(1).lower())
-                continue
-
-            #check for data section start
-            if line.lower().startswith('@data'):
-                in_data_section = True
-                continue
-
-            #parse data rows
-            if in_data_section and line:
-                #handle quoted strings in ARFF
-                #split by comma, but respect quotes
-                values = []
-                current = ""
-                in_quotes = False
-                quote_char = None
-
-                for char in line:
-                    if char in ["'", '"'] and not in_quotes:
-                        in_quotes = True
-                        quote_char = char
-                    elif char == quote_char and in_quotes:
-                        in_quotes = False
-                        quote_char = None
-                    elif char == ',' and not in_quotes:
-                        values.append(current.strip().strip("'\""))
-                        current = ""
-                    else:
-                        current += char
-
-                if current:
-                    values.append(current.strip().strip("'\""))
-
-                if values:
-                    data_rows.append(values)
-
-    #create DataFrame
     if not data_rows:
         return pd.DataFrame(columns=['start_time', 'end_time', 'chord'])
 
-    df = pd.DataFrame(data_rows, columns=attributes[:len(data_rows[0])] if attributes else None)
+    df = pd.DataFrame(data_rows, columns=['start_time', 'chord'])
+    #calculate end_time dynamically from the next chord's start_time
+    df['end_time'] = df['start_time'].shift(-1)
+    #give the very last chord a 10s buffer (dataset loader clamps to audio length)
+    df['end_time'] = df['end_time'].fillna(df['start_time'].iloc[-1] + 10.0)
 
-    #normalise column names to expected format
-    column_mapping = {}
-    for col in df.columns:
-        col_lower = col.lower() if isinstance(col, str) else str(col)
-        if col_lower in ['start', 'start_time', 'starttime', 'onset']:
-            column_mapping[col] = 'start_time'
-        elif col_lower in ['end', 'end_time', 'endtime', 'offset']:
-            column_mapping[col] = 'end_time'
-        elif col_lower in ['chord', 'label', 'chordlabel', 'chord_label']:
-            column_mapping[col] = 'chord'
-
-    df = df.rename(columns=column_mapping)
-
-    #make sure required columns exist
-    if 'start_time' not in df.columns or 'end_time' not in df.columns:
-        #try positional: assume first two columns are start/end
-        cols = list(df.columns)
-        if len(cols) >= 2:
-            df = df.rename(columns={cols[0]: 'start_time', cols[1]: 'end_time'})
-        if len(cols) >= 3 and 'chord' not in df.columns:
-            df = df.rename(columns={cols[2]: 'chord'})
-
-    #convert time columns to float
-    if 'start_time' in df.columns:
-        df['start_time'] = pd.to_numeric(df['start_time'], errors='coerce').fillna(0)
-    if 'end_time' in df.columns:
-        df['end_time'] = pd.to_numeric(df['end_time'], errors='coerce').fillna(0)
-
-    return df
+    return df[['start_time', 'end_time', 'chord']]
 
 
 def load_labels(filepath: str) -> pd.DataFrame:
