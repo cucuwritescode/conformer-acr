@@ -50,21 +50,47 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
         row = self.metadata.iloc[idx]
         audio_path = os.path.join(self.audio_dir, row["audio_file"])
 
-        #extract CQT Spectrogram, (time, 252)
+        #extract cqt spectrogram, (time, 252)
         cqt_tensor = extract_cqt(audio_path)
         time_frames = cqt_tensor.shape[0]
 
-        #load and align labels
+        #load labels
         #label_file is a CSV with 'start_time', 'end_time', 'chord'
-        #in production you'd sample the label at each CQT time frame
         label_df = pd.read_csv(os.path.join(self.audio_dir, row["label_file"]))
 
+        #initialise label tensors
         root_labels = torch.zeros(time_frames, dtype=torch.long)
         bass_labels = torch.zeros(time_frames, dtype=torch.long)
         qual_labels = torch.zeros(time_frames, dtype=torch.long)
 
-        # TODO: Replace with exact timestamp → frame alignment logic
-        #root_labels[:], bass_labels[:], qual_labels[:] = self.vocab_mapper(label_df)
+        #align labels to CQT frames using timestamps
+        #cqt frame rate: SR / HOP_LENGTH frames per second
+        from conformer_acr.config import SR, HOP_LENGTH
+        frame_duration = HOP_LENGTH / SR  #seconds per frame
+
+        for _, label_row in label_df.iterrows():
+            start_time = float(label_row['start_time'])
+            end_time = float(label_row['end_time'])
+            chord_str = str(label_row['chord'])
+
+            #convert timestamps to frame indices
+            start_frame = int(start_time / frame_duration)
+            end_frame = int(end_time / frame_duration)
+
+            #clamp to valid range
+            start_frame = max(0, min(start_frame, time_frames - 1))
+            end_frame = max(0, min(end_frame, time_frames))
+
+            #parse chord using vocab_mapper
+            if self.vocab_mapper is not None:
+                root_idx, qual_idx, bass_idx = self.vocab_mapper.parse_chord(chord_str)
+            else:
+                root_idx, qual_idx, bass_idx = 0, 0, 0
+
+            #assign labels to frames
+            root_labels[start_frame:end_frame] = root_idx
+            qual_labels[start_frame:end_frame] = qual_idx
+            bass_labels[start_frame:end_frame] = bass_idx
 
         return cqt_tensor, root_labels, bass_labels, qual_labels
 
