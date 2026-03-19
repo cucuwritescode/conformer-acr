@@ -44,33 +44,31 @@ def parse_arff(filepath: str) -> pd.DataFrame:
         DataFrame with columns: start_time, end_time, chord
     """
     data_rows = []
-    in_data = False
 
     with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('%') or line.lower().startswith('@'):
-                if line.lower().startswith('@data'):
-                    in_data = True
+            #skip empty lines, comments, and headers
+            if not line or line.startswith('%') or line.startswith('@'):
                 continue
-            if in_data:
-                parts = line.split(',')
-                if len(parts) >= 4:
-                    try:
-                        start_time = float(parts[0])
-                        #chord is always the last column in beatinfo
-                        chord = parts[-1].strip().strip("'\"")
-                        data_rows.append([start_time, chord])
-                    except ValueError:
-                        pass
+
+            #if we made it here, it's a raw data row
+            parts = line.split(',')
+            if len(parts) >= 4:
+                try:
+                    start_time = float(parts[0])
+                    #chord is always the last column
+                    chord = parts[-1].strip().strip("'\"")
+                    data_rows.append([start_time, chord])
+                except ValueError:
+                    pass
 
     if not data_rows:
         return pd.DataFrame(columns=['start_time', 'end_time', 'chord'])
 
     df = pd.DataFrame(data_rows, columns=['start_time', 'chord'])
-    #calculate end_time dynamically from the next chord's start_time
+    #calculate end_time dynamically
     df['end_time'] = df['start_time'].shift(-1)
-    #give the very last chord a 10s buffer (dataset loader clamps to audio length)
     df['end_time'] = df['end_time'].fillna(df['start_time'].iloc[-1] + 10.0)
 
     return df[['start_time', 'end_time', 'chord']]
