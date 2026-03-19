@@ -104,3 +104,7 @@ conformer_acr/
 ## `lit_review/`
 
 The `lit_review/` directory contains standalone research scripts and datasets used during the literature review phase. It is **not** part of the library.
+
+
+## Acknowledgements
+This work is part of the N8 Centre for Computationally Intensive Research project "Deep Learning Models for Automatic Chord Recognition in Polyphonic Audio” for the EPSRC-funded Bede Supercomputer studentship. Supervised by Dr. Karolina Prawda.
