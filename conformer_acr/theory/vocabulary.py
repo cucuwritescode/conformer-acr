@@ -18,16 +18,16 @@ from __future__ import annotations
 import re
 from typing import Final, Tuple
 
-# ── Pitch-class mapping (0–11, 12 = No Chord) ───────────────────────
-# Enharmonic equivalence: Db and C# both map to 1, etc.
+#pitch-class mapping (0–11, 12 =no chord)
+#enharmonic equivalence: Db and C# both map to 1, etc.
 PITCH_CLASSES: Final[dict[str, int]] = {
     'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
     'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8,
     'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11,
-    'N': 12,  # No Chord / Silence
+    'N': 12,  #no chord / silence
 }
 
-# ── Canonical labels (for reverse-mapping) ───────────────────────────
+#canonical labels (for reverse-mapping)
 ROOT_LABELS: Final[list[str]] = [
     "C", "C#", "D", "Eb", "E", "F",
     "F#", "G", "Ab", "A", "Bb", "B",
@@ -42,13 +42,13 @@ BASS_LABELS: Final[list[str]] = [
 ]
 """Bass note labels (12 pitch classes + 'N' for root-position / no bass)."""
 
-# ── Quality mapping (15 classes for the quality head) ────────────────
+#quality mapping (15 classes for the quality head)
 QUALITIES: Final[dict[str, int]] = {
     'maj': 0, 'min': 1, 'dim': 2, 'aug': 3,
     'maj7': 4, 'min7': 5, '7': 6, 'dim7': 7,
     'hdim7': 8, 'sus2': 9, 'sus4': 10,
     'maj6': 11, 'min6': 12, '9': 13,
-    'N': 14,  # No Chord
+    'N': 14,  #no chord
 }
 
 QUALITY_LABELS: Final[list[str]] = [
@@ -60,16 +60,16 @@ QUALITY_LABELS: Final[list[str]] = [
 ]
 """Supported chord quality labels in vocabulary order."""
 
-# ── Full chord label list (Root:Quality, all combinations) ───────────
+#full chord label list (Root:Quality, all combinations)
 CHORD_LABELS: Final[list[str]] = [
     *(f"{root}:{qual}"
       for root in ROOT_LABELS[:-1]          # 12 pitch classes (exclude N)
       for qual in QUALITY_LABELS[:-1]),      # 14 qualities (exclude N)
-    "N",                                     # No-chord sentinel
+    "N",                                     #no chord sentinel
 ]
 """Flat list of all chord labels in vocabulary order (168 + N = 169)."""
 
-# ── Lookup dicts (built once at import time) ─────────────────────────
+#lookup dicts (built once at import time)
 _CHORD_TO_IDX: Final[dict[str, int]] = {
     label: idx for idx, label in enumerate(CHORD_LABELS)
 }
@@ -81,7 +81,7 @@ _ROOT_TO_IDX: Final[dict[str, int]] = {
 }
 
 
-# ── Core parser ─────────────────────────────────────────────────────
+#core parser
 def parse_chord_string(chord_string: str) -> Tuple[int, int, int]:
     """Convert a MIREX-style chord string into ``(root_idx, bass_idx, quality_idx)``.
 
@@ -106,42 +106,42 @@ def parse_chord_string(chord_string: str) -> Tuple[int, int, int]:
         ``(root_idx, bass_idx, quality_idx)`` ready for the three
         classification heads.
     """
-    # Handle No-Chord / silence / unknown
+    #handle no-chord/silence/unknown
     if chord_string == 'N' or chord_string.startswith('X'):
         return PITCH_CLASSES['N'], PITCH_CLASSES['N'], QUALITIES['N']
 
-    # Regex: Root:Quality/Bass  or  Root:Quality  or  Root/Bass  or  Root
+    #regex: root:quality/bass or root:quality or root/bass or root
     match = re.match(r'^([A-G][#b]?)(?::(.+?))?(?:/(.+))?$', chord_string)
 
     if not match:
-        # Fallback for unrecognised formatting → treat as no-chord
+        #fallback for unrecognised formatting → treat as no-chord
         return PITCH_CLASSES['N'], PITCH_CLASSES['N'], QUALITIES['N']
 
     root_str, qual_str, bass_str = match.groups()
 
-    # 1. Parse Root
+    #parse root
     root_idx = PITCH_CLASSES.get(root_str, PITCH_CLASSES['N'])
 
-    # 2. Parse Quality
-    # If no quality is specified, default to major (standard MIREX convention)
+    #parse quality
+    #if no quality is specified, default to major (standard MIREX convention)
     qual_str = qual_str if qual_str else 'maj'
-    # Simplify complex extensions if they aren't in our vocab
+    #simplify complex extensions if they aren't in our vocab
     qual_idx = QUALITIES.get(qual_str, QUALITIES['maj'])
 
-    # 3. Parse Bass
-    # If no bass is specified, the bass is the root
+    #parse bass
+    #if no bass is specified, the bass is the root
     if not bass_str:
         bass_idx = root_idx
     else:
-        # Sometimes bass is written as an interval (e.g., '3' or 'b7').
-        # For this setup, we map absolute pitch-class bass notes if
-        # provided; otherwise default to root.
+        #sometimes bass is written as an interval (e.g., '3' or 'b7').
+        #for this setup, we map absolute pitch-class bass notes if
+        #provided; otherwise default to root.
         bass_idx = PITCH_CLASSES.get(bass_str, root_idx)
 
     return root_idx, bass_idx, qual_idx
 
 
-# ── Convenience helpers ─────────────────────────────────────────────
+#convenience helpers
 def chord_to_index(label: str) -> int:
     """Map a chord string (e.g. ``'C:maj'``) to its vocabulary index.
 

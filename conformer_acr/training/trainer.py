@@ -80,12 +80,18 @@ class Trainer:
             train_loss = self._train_epoch(train_loader)
             history["train_loss"].append(train_loss)
 
+            log_msg = f"[Epoch {epoch:03d}/{epochs}] train_loss={train_loss:.4f}"
+
             if val_loader is not None:
                 val_loss = self._validate(val_loader)
                 history["val_loss"].append(val_loss)
+                log_msg += f" | val_loss={val_loss:.4f}"
+
+            print(log_msg, flush=True)
 
             if self.checkpoint_dir is not None:
-                self.save_checkpoint(epoch)
+                ckpt_path = self.save_checkpoint(epoch)
+                print(f"  -> Checkpoint saved: {ckpt_path}", flush=True)
 
         return history
 
@@ -95,11 +101,31 @@ class Trainer:
         total_loss = 0.0
         n_batches = 0
         for batch in loader:
-            # TODO: unpack batch dict and move tensors to self.device
+            # Unpack batch dict and move tensors to device
+            cqt = batch["cqt"].float().to(self.device)
+            lengths = batch["lengths"].to(self.device)
+            root = batch["root"].to(self.device)
+            bass = batch["bass"].to(self.device)
+            qual = batch["qual"].to(self.device)
+
+            # Create padding mask from lengths
+            max_len = cqt.size(1)
+            mask = torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)
+
             self.optimizer.zero_grad()
-            # loss = self.loss_fn(...)
-            # loss.backward()
+
+            out = self.model(cqt, mask=mask)
+
+            # Compute loss for each head and sum
+            loss_root = self.loss_fn(out["root"].transpose(1, 2), root)
+            loss_qual = self.loss_fn(out["quality"].transpose(1, 2), qual)
+            loss_bass = self.loss_fn(out["bass"].transpose(1, 2), bass)
+            loss = loss_root + loss_qual + loss_bass
+
+            loss.backward()
             self.optimizer.step()
+
+            total_loss += loss.item()
             n_batches += 1
         return total_loss / max(n_batches, 1)
 
@@ -110,7 +136,26 @@ class Trainer:
         n_batches = 0
         with torch.no_grad():
             for batch in loader:
-                # TODO: unpack batch dict and move tensors to self.device
+                # Unpack batch dict and move tensors to device
+                cqt = batch["cqt"].float().to(self.device)
+                lengths = batch["lengths"].to(self.device)
+                root = batch["root"].to(self.device)
+                bass = batch["bass"].to(self.device)
+                qual = batch["qual"].to(self.device)
+
+                # Create padding mask from lengths
+                max_len = cqt.size(1)
+                mask = torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)
+
+                out = self.model(cqt, mask=mask)
+
+                # Compute loss for each head and sum
+                loss_root = self.loss_fn(out["root"].transpose(1, 2), root)
+                loss_qual = self.loss_fn(out["quality"].transpose(1, 2), qual)
+                loss_bass = self.loss_fn(out["bass"].transpose(1, 2), bass)
+                loss = loss_root + loss_qual + loss_bass
+
+                total_loss += loss.item()
                 n_batches += 1
         return total_loss / max(n_batches, 1)
 

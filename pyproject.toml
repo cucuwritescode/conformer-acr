@@ -14,13 +14,12 @@ authors = [
 ]
 dependencies = [
     "torch>=1.9.0",
-    "torchaudio>=0.9.0",
     "numpy",
     "scipy",
     "librosa",
     "pandas",
     "mir_eval",
-    "tqdm"
+    "soundfile",
 ]
 
 [project.optional-dependencies]
