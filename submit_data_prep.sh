@@ -1,8 +1,9 @@
 #!/bin/bash
 #SBATCH --job-name=acr_data_prep
+#SBATCH --account=bdyrk27
 #SBATCH --nodes=1
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gres=gpu:v100:4
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=256G
 #SBATCH --time=48:00:00
@@ -19,16 +20,13 @@ FINAL_AUDIO_DIR="$WORKSPACE/slakh_audio"
 mkdir -p $MUTATED_MIDI_DIR
 mkdir -p $FINAL_AUDIO_DIR
 
-#step 1: run active synthetic mutation
-echo "[STEP 1] Running mutate.py..."
+echo "[STEP 1] Running Active Synthetic Mutation (mutate.py)..."
 python mutate.py --input-dir $RAW_MIDI_DIR --output-dir $MUTATED_MIDI_DIR
 
-#step 2: run hybrid rendering and cqt extraction
-echo "[STEP 2] Running render_hybrid.py..."
+echo "[STEP 2] Running Hybrid Rendering & CQT Extraction (render_hybrid.py)..."
 python render_hybrid.py
 
-#step 3: generate dataset index
-echo "[STEP 3] Running prep_dataset.py..."
+echo "[STEP 3] Generating Dataset Index (prep_dataset.py)..."
 python prep_dataset.py --data-dir $FINAL_AUDIO_DIR --output index.csv
 
 echo "Pipeline finished successfully."
