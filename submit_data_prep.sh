@@ -3,9 +3,7 @@
 #SBATCH --account=bdyrk27
 #SBATCH --nodes=1
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:v100:4
-#SBATCH --cpus-per-task=40
-#SBATCH --mem=256G
+#SBATCH --gres=gpu:4
 #SBATCH --time=48:00:00
 #SBATCH --output=data_prep_%j.log
 
