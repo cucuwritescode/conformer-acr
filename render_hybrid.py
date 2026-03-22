@@ -22,7 +22,7 @@ import torch
 #constants
 # ============================================================================
 
-N_CORES = 40
+N_CORES = 32
 SR = 22050
 SOUNDFONT = "FluidR3_GM.sf2"
 
