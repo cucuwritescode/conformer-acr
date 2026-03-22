@@ -25,6 +25,10 @@ echo "[STEP 2] Running Hybrid Rendering & CQT Extraction (render_hybrid.py)..."
 python render_hybrid.py
 
 echo "[STEP 3] Generating Dataset Index (prep_dataset.py)..."
-python prep_dataset.py --data-dir $FINAL_AUDIO_DIR --output index.csv
+python prep_dataset.py \
+    --data-dir $FINAL_AUDIO_DIR \
+    --output index.csv \
+    --audio-pattern "(.*)_mix\.flac$" \
+    --label-pattern "(.*)_labels\.csv$"
 
 echo "Pipeline finished successfully."

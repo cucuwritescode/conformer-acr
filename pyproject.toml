@@ -20,6 +20,8 @@ dependencies = [
     "pandas",
     "mir_eval",
     "soundfile",
+    "pretty_midi",
+    "joblib",
 ]
 
 [project.optional-dependencies]

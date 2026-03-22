@@ -71,13 +71,63 @@ def process_track(midi_file: str, output_dir: str) -> None:
     track_name = os.path.basename(midi_file).replace('.mid', '')
     flac_out = os.path.join(output_dir, f"{track_name}_mix.flac")
     cqt_out = os.path.join(output_dir, f"{track_name}_cqt.pt")
+    label_out = os.path.join(output_dir, f"{track_name}_labels.csv")
 
     #skip if already processed
-    if os.path.exists(cqt_out):
+    if os.path.exists(cqt_out) and os.path.exists(label_out):
         return
 
     try:
         midi_data = pretty_midi.PrettyMIDI(midi_file)
+
+        #generate ground truth labels from midi
+        with open(label_out, 'w') as f:
+            f.write("start_time,end_time,chord\n")
+
+            #pool all polyphonic notes to extract the full harmonic context
+            all_notes = []
+            for inst in midi_data.instruments:
+                if not inst.is_drum:
+                    all_notes.extend(inst.notes)
+
+            duration = midi_data.get_end_time()
+            hop = 0.5  #0.5 second resolution for chord boundaries
+
+            for start_t in np.arange(0, duration, hop):
+                end_t = min(start_t + hop, duration)
+                active_pitches = set()
+
+                for note in all_notes:
+                    if note.start < end_t and note.end > start_t:
+                        active_pitches.add(note.pitch)
+
+                if len(active_pitches) < 3:
+                    f.write(f"{start_t:.3f},{end_t:.3f},N\n")
+                    continue
+
+                pitches = sorted(list(active_pitches))
+                root = pitches[0] % 12
+                intervals = set((p - root) % 12 for p in pitches)
+
+                #match against mutated intervals (7, dim7, hdim7, min, maj)
+                if {4, 7, 10}.issubset(intervals):
+                    quality = "7"
+                elif {3, 6, 9}.issubset(intervals):
+                    quality = "dim7"
+                elif {3, 6, 10}.issubset(intervals):
+                    quality = "hdim7"
+                elif {3, 7}.issubset(intervals):
+                    quality = "min"
+                elif {4, 7}.issubset(intervals):
+                    quality = "maj"
+                else:
+                    quality = "N"
+
+                if quality == "N":
+                    f.write(f"{start_t:.3f},{end_t:.3f},N\n")
+                else:
+                    root_name = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][root]
+                    f.write(f"{start_t:.3f},{end_t:.3f},{root_name}:{quality}\n")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             stem_arrays = []
