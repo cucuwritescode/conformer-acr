@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
 """
-render_hybrid.py - HPC multi-core hybrid audio renderer
+render_hybrid.py - HPC multi-core audio renderer
 
-Renders MIDI files to audio using a hybrid approach:
-- Complex instruments (piano, strings): DDSP neural synthesis
-- Simple instruments (drums, etc): FluidSynth soundfont
-
-Also extracts CQT spectrograms for training.
+Renders MIDI files to audio using FluidSynth and extracts CQT spectrograms.
 """
 
 import os
@@ -28,10 +24,7 @@ import torch
 
 N_CORES = 40
 SR = 22050
-SOUNDFONT = "FluidR3_GM.sf2"  #ensure you have a basic .sf2 file or update this path
-
-#complex instrument programs (piano, strings) - use DDSP
-COMPLEX_PROGRAMS = list(range(0, 8)) + list(range(40, 56))
+SOUNDFONT = "FluidR3_GM.sf2"
 
 
 # ============================================================================
@@ -52,24 +45,6 @@ def _fluid_render(midi_path: str, out_wav: str) -> bool:
         return False
     except FileNotFoundError:
         print(f"FluidSynth not found. Install with: apt install fluidsynth", flush=True)
-        return False
-
-
-def _ddsp_render(midi_path: str, out_wav: str) -> bool:
-    """Render MIDI to audio using DDSP neural synthesis."""
-    cmd = [
-        "midi_ddsp_synthesize",
-        "--midi_path", midi_path,
-        "--output_dir", os.path.dirname(out_wav)
-    ]
-    try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"DDSP failed for {midi_path}: {e.stderr}", flush=True)
-        return False
-    except FileNotFoundError:
-        print(f"midi-ddsp not found. Install with: pip install midi-ddsp", flush=True)
         return False
 
 
@@ -176,12 +151,7 @@ def process_track(midi_file: str, output_dir: str) -> None:
                 tmp_wav = os.path.join(tmpdir, f"stem_{i}.wav")
                 stem_midi.write(tmp_mid)
 
-                #choose renderer based on instrument complexity
-                is_complex = not inst.is_drum and inst.program in COMPLEX_PROGRAMS
-                if is_complex:
-                    _ddsp_render(tmp_mid, tmp_wav)
-                else:
-                    _fluid_render(tmp_mid, tmp_wav)
+                _fluid_render(tmp_mid, tmp_wav)
 
                 #load rendered audio
                 if os.path.exists(tmp_wav):

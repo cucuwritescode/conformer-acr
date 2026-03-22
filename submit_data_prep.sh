@@ -2,9 +2,9 @@
 #SBATCH --job-name=acr_data_prep
 #SBATCH --account=bdyrk27
 #SBATCH --nodes=1
-#SBATCH --partition=gpu
-#SBATCH --gres=gpu:4
-#SBATCH --time=12:00:00
+#SBATCH --partition=cpu
+#SBATCH --cpus-per-task=40
+#SBATCH --time=04:00:00
 #SBATCH --output=data_prep_%j.log
 
 source ~/miniconda3/bin/activate
