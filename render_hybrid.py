@@ -38,23 +38,39 @@ COMPLEX_PROGRAMS = list(range(0, 8)) + list(range(40, 56))
 #rendering functions
 # ============================================================================
 
-def _fluid_render(midi_path: str, out_wav: str) -> None:
+def _fluid_render(midi_path: str, out_wav: str) -> bool:
     """Render MIDI to audio using FluidSynth."""
     cmd = [
         "fluidsynth", "-ni", SOUNDFONT, midi_path,
         "-F", out_wav, "-r", str(SR), "-q"
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"FluidSynth failed for {midi_path}: {e.stderr}", flush=True)
+        return False
+    except FileNotFoundError:
+        print(f"FluidSynth not found. Install with: apt install fluidsynth", flush=True)
+        return False
 
 
-def _ddsp_render(midi_path: str, out_wav: str) -> None:
+def _ddsp_render(midi_path: str, out_wav: str) -> bool:
     """Render MIDI to audio using DDSP neural synthesis."""
     cmd = [
         "midi_ddsp_synthesize",
         "--midi_path", midi_path,
         "--output_dir", os.path.dirname(out_wav)
     ]
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"DDSP failed for {midi_path}: {e.stderr}", flush=True)
+        return False
+    except FileNotFoundError:
+        print(f"midi-ddsp not found. Install with: pip install midi-ddsp", flush=True)
+        return False
 
 
 def process_track(midi_file: str, output_dir: str) -> None:

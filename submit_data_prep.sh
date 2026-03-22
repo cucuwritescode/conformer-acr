@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --partition=gpu
 #SBATCH --gres=gpu:4
-#SBATCH --time=48:00:00
+#SBATCH --time=12:00:00
 #SBATCH --output=data_prep_%j.log
 
 source ~/miniconda3/bin/activate
