@@ -1,8 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=acr_data_prep
+#SBATCH --job-name=acr_data_fluid
 #SBATCH --account=bdyrk27
+#SBATCH --partition=gpu
 #SBATCH --nodes=1
-#SBATCH --partition=cpu
+#SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=40
 #SBATCH --time=04:00:00
 #SBATCH --output=data_prep_%j.log
