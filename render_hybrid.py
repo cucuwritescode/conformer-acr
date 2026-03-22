@@ -125,17 +125,34 @@ def process_track(midi_file: str, output_dir: str) -> None:
                 root = pitches[0] % 12
                 intervals = set((p - root) % 12 for p in pitches)
 
-                #match against mutated intervals (7, dim7, hdim7, min, maj)
+                #match against mutated intervals - check complex chords first
+                #altered dominants (7b9, 7#9) - dominant 7th with b9 or #9
                 if {4, 7, 10}.issubset(intervals):
-                    quality = "7"
+                    if 1 in intervals:  # b9 = minor 2nd
+                        quality = "7b9"
+                    elif 3 in intervals and 4 in intervals:  # #9 = augmented 2nd (enharmonic to minor 3rd)
+                        quality = "7#9"
+                    else:
+                        quality = "7"
                 elif {3, 6, 9}.issubset(intervals):
                     quality = "dim7"
                 elif {3, 6, 10}.issubset(intervals):
                     quality = "hdim7"
-                elif {3, 7}.issubset(intervals):
-                    quality = "min"
+                #extensions (11ths, 13ths) on triads
                 elif {4, 7}.issubset(intervals):
-                    quality = "maj"
+                    if 9 in intervals:  # 13th = major 6th
+                        quality = "maj13"
+                    elif 5 in intervals:  # 11th = perfect 4th
+                        quality = "maj11"
+                    else:
+                        quality = "maj"
+                elif {3, 7}.issubset(intervals):
+                    if 9 in intervals:  # 13th
+                        quality = "min13"
+                    elif 5 in intervals:  # 11th
+                        quality = "min11"
+                    else:
+                        quality = "min"
                 else:
                     quality = "N"
 
