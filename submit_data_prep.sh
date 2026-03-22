@@ -4,7 +4,6 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=32
 #SBATCH --time=04:00:00
 #SBATCH --output=data_prep_%j.log
 
