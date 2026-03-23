@@ -19,11 +19,11 @@ export NCCL_P2P_LEVEL=NVL          #prefer NVLink for GPU-to-GPU
 export NCCL_DEBUG=WARN             #log warnings (use INFO to debug hangs)
 
 #define absolute paths
-WORKSPACE="/nobackup/projects/bdyrk27/slakh_workspace"
-DATA_DIR="$WORKSPACE/slakh_audio"
-TRAIN_INDEX="$WORKSPACE/conformer-acr/train_index.csv"
-VAL_INDEX="$WORKSPACE/conformer-acr/val_index.csv"
-CHECKPOINT_DIR="$WORKSPACE/conformer-acr/checkpoints"
+REPO_DIR="/users/ffranchino/conformer-acr"
+DATA_DIR="/nobackup/projects/bdyrk27/slakh_workspace/slakh_audio"
+TRAIN_INDEX="$REPO_DIR/train_index.csv"
+VAL_INDEX="$REPO_DIR/val_index.csv"
+CHECKPOINT_DIR="$REPO_DIR/checkpoints"
 
 echo "=========================================================="
 echo "ConformerACR Distributed Training"
