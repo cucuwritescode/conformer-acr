@@ -38,6 +38,12 @@ class ConformerACR(nn.Module):
         Dimensionality of each input frame (default: ``N_CQT_BINS``).
     dropout : float
         Dropout probability applied throughout.
+    num_roots : int
+        Number of root pitch classes (default: 13 = 12 + No Chord).
+    num_qualities : int
+        Number of chord quality classes (dynamic based on dataset).
+    num_bass : int
+        Number of bass classes (default: 13 = 12 + no-bass).
     """
 
     def __init__(
@@ -47,6 +53,9 @@ class ConformerACR(nn.Module):
         n_layers: int = 4,
         input_dim: int = N_CQT_BINS,
         dropout: float = 0.1,
+        num_roots: int = NUM_ROOTS,
+        num_qualities: int = NUM_QUALITIES,
+        num_bass: int = NUM_BASS,
     ) -> None:
         super().__init__()
 
@@ -63,10 +72,10 @@ class ConformerACR(nn.Module):
             num_layers=n_layers,
         )
 
-        # ── Classification heads ────────────────────────────────────
-        self.head_root = nn.Linear(d_model, NUM_ROOTS)
-        self.head_quality = nn.Linear(d_model, NUM_QUALITIES)
-        self.head_bass = nn.Linear(d_model, NUM_BASS)
+        # ── Classification heads (dynamic vocab sizes) ──────────────
+        self.head_root = nn.Linear(d_model, num_roots)
+        self.head_quality = nn.Linear(d_model, num_qualities)
+        self.head_bass = nn.Linear(d_model, num_bass)
 
     def forward(
         self,

@@ -126,8 +126,14 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
         row = self.metadata.iloc[idx]
         audio_path = os.path.join(self.audio_dir, row["audio_file"])
 
-        #extract cqt spectrogram, (time, 252)
-        cqt_tensor = extract_cqt(audio_path)
+        #try to load pre-computed CQT tensor first (faster)
+        #render_hybrid.py saves these as *_cqt.pt alongside *_mix.flac
+        cqt_path = audio_path.replace('_mix.flac', '_cqt.pt').replace('.flac', '_cqt.pt')
+        if os.path.exists(cqt_path):
+            cqt_tensor = torch.load(cqt_path, map_location="cpu", weights_only=True)
+        else:
+            #fallback: extract CQT on the fly
+            cqt_tensor = extract_cqt(audio_path)
         time_frames = cqt_tensor.shape[0]
 
         #load labels (supports .csv or .arff)
