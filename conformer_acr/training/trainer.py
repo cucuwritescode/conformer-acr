@@ -15,7 +15,7 @@ from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-from torch.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler, autocast  #works on pytorch 1.x and 2.x
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -62,7 +62,7 @@ class Trainer:
 
         #AMP: mixed precision for ~2x speedup on V100 tensor cores
         self.use_amp = self.device.type == "cuda"
-        self.scaler = GradScaler("cuda", enabled=self.use_amp)
+        self.scaler = GradScaler(enabled=self.use_amp)
 
     def fit(
         self,
@@ -139,7 +139,7 @@ class Trainer:
             self.optimizer.zero_grad()
 
             #AMP: autocast forward pass to FP16
-            with autocast("cuda", enabled=self.use_amp):
+            with autocast(enabled=self.use_amp):
                 out = self.model(cqt, mask=mask)
 
                 #compute loss for each head and sum
@@ -176,7 +176,7 @@ class Trainer:
                 mask = torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)
 
                 #AMP: autocast inference
-                with autocast("cuda", enabled=self.use_amp):
+                with autocast(enabled=self.use_amp):
                     out = self.model(cqt, mask=mask)
 
                     #compute loss for each head and sum
