@@ -48,7 +48,7 @@ def _fluid_render(midi_path: str, out_wav: str) -> bool:
         return False
 
 
-def process_track(midi_file: str, output_dir: str) -> None:
+def process_track(midi_file: str, output_dir: str, input_base_dir: str) -> None:
     """
     Process a single MIDI file: render to audio and extract CQT.
 
@@ -58,8 +58,13 @@ def process_track(midi_file: str, output_dir: str) -> None:
         Path to input MIDI file.
     output_dir : str
         Directory to save output .flac and .pt files.
+    input_base_dir : str
+        Base directory for calculating relative paths.
     """
-    track_name = os.path.basename(midi_file).replace('.mid', '')
+    #generate safe unique filename like 'train_Track01886_MIDI_S07'
+    #so stems from different tracks don't overwrite each other
+    rel_path = os.path.relpath(midi_file, input_base_dir)
+    track_name = rel_path.replace(os.sep, '_').replace('.mid', '')
     flac_out = os.path.join(output_dir, f"{track_name}_mix.flac")
     cqt_out = os.path.join(output_dir, f"{track_name}_cqt.pt")
     label_out = os.path.join(output_dir, f"{track_name}_labels.csv")
@@ -197,11 +202,12 @@ if __name__ == "__main__":
 
     os.makedirs(OUTPUT_AUDIO_DIR, exist_ok=True)
 
-    midi_files = glob.glob(os.path.join(MUTATED_MIDI_DIR, "**/*.mid"), recursive=True)
+    midi_files = glob.glob(os.path.join(MUTATED_MIDI_DIR, "**", "*.mid"), recursive=True)
     print(f"Found {len(midi_files)} MIDI files to process", flush=True)
 
+    #pass MUTATED_MIDI_DIR so process_track can calculate relative paths
     Parallel(n_jobs=N_CORES, verbose=10)(
-        delayed(process_track)(f, OUTPUT_AUDIO_DIR) for f in midi_files
+        delayed(process_track)(f, OUTPUT_AUDIO_DIR, MUTATED_MIDI_DIR) for f in midi_files
     )
 
     print("Rendering complete.", flush=True)

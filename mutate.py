@@ -70,7 +70,8 @@ def calculate_total_frames(input_dir: str, frames_per_second: int = FRAMES_PER_S
         Total number of frames across all files.
     """
     total_frames = 0
-    midi_files = glob.glob(os.path.join(input_dir, "*.mid"))
+    #recursive to dig into Slakh subfolders
+    midi_files = glob.glob(os.path.join(input_dir, "**", "*.mid"), recursive=True)
 
     for filepath in midi_files:
         pm = pretty_midi.PrettyMIDI(filepath)
@@ -242,7 +243,8 @@ def build_candidate_ledger(input_dir: str) -> List[Dict]:
         Ledger entries with: filepath, track_idx, start_time, end_time, chord_type, pitches
     """
     ledger = []
-    midi_files = glob.glob(os.path.join(input_dir, "*.mid"))
+    #recursive to dig into Slakh subfolders
+    midi_files = glob.glob(os.path.join(input_dir, "**", "*.mid"), recursive=True)
 
     for filepath in midi_files:
         pm = pretty_midi.PrettyMIDI(filepath)
@@ -616,11 +618,17 @@ def mutate_dataset(
     #pass 2: apply mutations and save
     print("\nPass 2: Applying mutations...", flush=True)
 
-    midi_files = glob.glob(os.path.join(input_dir, "*.mid"))
+    #recursive to dig into Slakh subfolders
+    midi_files = glob.glob(os.path.join(input_dir, "**", "*.mid"), recursive=True)
 
     for filepath in midi_files:
         pm = pretty_midi.PrettyMIDI(filepath)
-        filename = os.path.basename(filepath)
+
+        #recreate the directory tree so files don't overwrite each other
+        #(Slakh names every stem S01.mid, S02.mid, etc.)
+        rel_path = os.path.relpath(filepath, input_dir)
+        output_path = os.path.join(output_dir, rel_path)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         if filepath in mutations_by_file:
             #group mutations by track
@@ -637,7 +645,6 @@ def mutate_dataset(
                     _apply_mutation_to_track(pm.instruments[track_idx], track_mutations)
 
         #save mutated file
-        output_path = os.path.join(output_dir, filename)
         pm.write(output_path)
 
     print(f"\nMutated files saved to {output_dir}/", flush=True)
