@@ -4,7 +4,7 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:4
-#SBATCH --time=24:00:00
+#SBATCH --time=04:00:00
 #SBATCH --output=train_%j.log
 
 #Bede auto-allocates 40 CPUs + 512GB RAM with 4 GPUs (full node)
