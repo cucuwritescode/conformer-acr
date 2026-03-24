@@ -314,18 +314,14 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
-    #separate loss functions per head, each ignoring "N" (no-chord) class
-    #this fixes the 93% N class imbalance by not training on silent frames
-    n_root_idx = vocab_mapper.root_to_idx['N']
-    n_qual_idx = vocab_mapper.quality_to_idx['N']
-    n_bass_idx = vocab_mapper.bass_to_idx['N']
+    #loss functions ignore index -100 (padding AND N-class frames, set in dataset)
     loss_fns = {
-        "root": torch.nn.CrossEntropyLoss(ignore_index=n_root_idx),
-        "quality": torch.nn.CrossEntropyLoss(ignore_index=n_qual_idx),
-        "bass": torch.nn.CrossEntropyLoss(ignore_index=n_bass_idx),
+        "root": torch.nn.CrossEntropyLoss(ignore_index=-100),
+        "quality": torch.nn.CrossEntropyLoss(ignore_index=-100),
+        "bass": torch.nn.CrossEntropyLoss(ignore_index=-100),
     }
     if rank == 0:
-        print(f"Ignoring N class: root={n_root_idx}, quality={n_qual_idx}, bass={n_bass_idx}", flush=True)
+        print("Loss ignores padding (-100) and N-class frames", flush=True)
 
     #resume from checkpoint if specified
     start_epoch = 1

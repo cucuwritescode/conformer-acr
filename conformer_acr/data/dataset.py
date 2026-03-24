@@ -176,6 +176,19 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
             qual_labels[start_frame:end_frame] = qual_idx
             bass_labels[start_frame:end_frame] = bass_idx
 
+        #replace N (no-chord) labels with -100 so loss ignores them
+        #this fixes 93% class imbalance by not training on silent frames
+        if self.vocab_mapper is not None:
+            n_root = self.vocab_mapper.root_to_idx.get('N', -1)
+            n_qual = self.vocab_mapper.quality_to_idx.get('N', -1)
+            n_bass = self.vocab_mapper.bass_to_idx.get('N', -1)
+            if n_root >= 0:
+                root_labels[root_labels == n_root] = -100
+            if n_qual >= 0:
+                qual_labels[qual_labels == n_qual] = -100
+            if n_bass >= 0:
+                bass_labels[bass_labels == n_bass] = -100
+
         #crop long sequences to avoid OOM in attention
         if self.max_seq_len and time_frames > self.max_seq_len:
             if self.random_crop:
