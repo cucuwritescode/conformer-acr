@@ -130,7 +130,7 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
         #render_hybrid.py saves these as *_cqt.pt alongside *_mix.flac
         cqt_path = audio_path.replace('_mix.flac', '_cqt.pt').replace('.flac', '_cqt.pt')
         if os.path.exists(cqt_path):
-            cqt_tensor = torch.load(cqt_path, map_location="cpu", weights_only=True)
+            cqt_tensor = torch.load(cqt_path, map_location="cpu")
         else:
             #fallback: extract CQT on the fly
             cqt_tensor = extract_cqt(audio_path)
