@@ -40,11 +40,13 @@ class FocalLoss(nn.Module):
         alpha: float = 1.0,
         gamma: float = 2.0,
         reduction: str = "mean",
+        ignore_index: int = -100,
     ) -> None:
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
+        self.ignore_index = ignore_index
 
     def forward(
         self,
@@ -65,12 +67,17 @@ class FocalLoss(nn.Module):
         Tensor
             Scalar loss (or per-sample if ``reduction='none'``).
         """
-        ce_loss = F.cross_entropy(inputs, targets, reduction="none")
+        ce_loss = F.cross_entropy(inputs, targets, reduction="none", ignore_index=self.ignore_index)
         pt = torch.exp(-ce_loss)
         focal_loss = self.alpha * (1.0 - pt) ** self.gamma * ce_loss
 
+        #mask out ignored indices for proper reduction
+        if self.ignore_index >= 0:
+            mask = targets != self.ignore_index
+            focal_loss = focal_loss[mask]
+
         if self.reduction == "mean":
-            return focal_loss.mean()
+            return focal_loss.mean() if focal_loss.numel() > 0 else focal_loss.sum()
         elif self.reduction == "sum":
             return focal_loss.sum()
         return focal_loss

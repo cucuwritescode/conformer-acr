@@ -46,7 +46,7 @@ class Trainer:
         self,
         model: nn.Module,
         optimizer: Optimizer,
-        loss_fn: nn.Module,
+        loss_fns: dict[str, nn.Module],
         device: str | torch.device = "cpu",
         checkpoint_dir: str | Path | None = None,
         rank: int = 0,
@@ -54,7 +54,7 @@ class Trainer:
     ) -> None:
         self.model = model.to(device)
         self.optimizer = optimizer
-        self.loss_fn = loss_fn
+        self.loss_fns = loss_fns  #{'root': ..., 'quality': ..., 'bass': ...}
         self.device = torch.device(device)
         self.checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else None
         self.rank = rank
@@ -142,10 +142,10 @@ class Trainer:
             with autocast(enabled=self.use_amp):
                 out = self.model(cqt, mask=mask.bool())
 
-                #compute loss for each head and sum
-                loss_root = self.loss_fn(out["root"].transpose(1, 2), root)
-                loss_qual = self.loss_fn(out["quality"].transpose(1, 2), qual)
-                loss_bass = self.loss_fn(out["bass"].transpose(1, 2), bass)
+                #compute loss for each head (each has its own ignore_index for N)
+                loss_root = self.loss_fns["root"](out["root"].transpose(1, 2), root)
+                loss_qual = self.loss_fns["quality"](out["quality"].transpose(1, 2), qual)
+                loss_bass = self.loss_fns["bass"](out["bass"].transpose(1, 2), bass)
                 loss = loss_root + loss_qual + loss_bass
 
             #AMP: scaled backward + unscaled step
@@ -179,10 +179,10 @@ class Trainer:
                 with autocast(enabled=self.use_amp):
                     out = self.model(cqt, mask=mask.bool())
 
-                    #compute loss for each head and sum
-                    loss_root = self.loss_fn(out["root"].transpose(1, 2), root)
-                    loss_qual = self.loss_fn(out["quality"].transpose(1, 2), qual)
-                    loss_bass = self.loss_fn(out["bass"].transpose(1, 2), bass)
+                    #compute loss for each head (each has its own ignore_index for N)
+                    loss_root = self.loss_fns["root"](out["root"].transpose(1, 2), root)
+                    loss_qual = self.loss_fns["quality"](out["quality"].transpose(1, 2), qual)
+                    loss_bass = self.loss_fns["bass"](out["bass"].transpose(1, 2), bass)
                     loss = loss_root + loss_qual + loss_bass
 
                 total_loss += loss.item()

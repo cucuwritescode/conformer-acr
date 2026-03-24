@@ -313,7 +313,19 @@ def main():
         model = DDP(model, device_ids=[local_rank])
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    loss_fn = FocalLoss()
+
+    #separate loss functions per head, each ignoring "N" (no-chord) class
+    #this fixes the 93% N class imbalance by not training on silent frames
+    n_root_idx = vocab_mapper.root_to_idx['N']
+    n_qual_idx = vocab_mapper.quality_to_idx['N']
+    n_bass_idx = vocab_mapper.bass_to_idx['N']
+    loss_fns = {
+        "root": FocalLoss(ignore_index=n_root_idx),
+        "quality": FocalLoss(ignore_index=n_qual_idx),
+        "bass": FocalLoss(ignore_index=n_bass_idx),
+    }
+    if rank == 0:
+        print(f"Ignoring N class: root={n_root_idx}, quality={n_qual_idx}, bass={n_bass_idx}", flush=True)
 
     #resume from checkpoint if specified
     start_epoch = 1
@@ -390,7 +402,7 @@ def main():
     trainer = Trainer(
         model=model,
         optimizer=optimizer,
-        loss_fn=loss_fn,
+        loss_fns=loss_fns,
         device=device,
         checkpoint_dir=args.checkpoint_dir,
         rank=rank,
