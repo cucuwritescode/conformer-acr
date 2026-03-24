@@ -37,7 +37,7 @@ torchrun --standalone --nproc_per_node=4 train.py \
     --index-file "$TRAIN_INDEX" \
     --val-index-file "$VAL_INDEX" \
     --checkpoint-dir "$CHECKPOINT_DIR" \
-    --batch-size 16 \
+    --batch-size 8 \
     --num-workers 10 \
     --epochs 100
 
