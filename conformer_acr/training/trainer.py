@@ -138,6 +138,10 @@ class Trainer:
 
             self.optimizer.zero_grad()
 
+            #skip batches with no valid targets (all -100)
+            if (root == -100).all():
+                continue
+
             #AMP: autocast forward pass to FP16
             with autocast(enabled=self.use_amp):
                 out = self.model(cqt, mask=mask.bool())
@@ -148,6 +152,10 @@ class Trainer:
                 loss_bass = self.loss_fns["bass"](out["bass"].transpose(1, 2), bass)
                 loss = loss_root + loss_qual + loss_bass
 
+            #skip if loss is NaN (shouldn't happen now, but safety check)
+            if torch.isnan(loss):
+                continue
+
             #AMP: scaled backward + unscaled step
             self.scaler.scale(loss).backward()
             self.scaler.step(self.optimizer)
@@ -155,7 +163,11 @@ class Trainer:
 
             total_loss += loss.item()
             n_batches += 1
-        return total_loss / max(n_batches, 1)
+
+        if n_batches == 0:
+            print(f"WARNING: No valid batches in epoch! All targets were -100.", flush=True)
+            return float('nan')
+        return total_loss / n_batches
 
     def _validate(self, loader: DataLoader) -> float:  # type: ignore[type-arg]
         """Run validation. Returns mean loss."""
@@ -175,6 +187,10 @@ class Trainer:
                 max_len = cqt.size(1)
                 mask = (torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)).bool()
 
+                #skip batches with no valid targets
+                if (root == -100).all():
+                    continue
+
                 #AMP: autocast inference
                 with autocast(enabled=self.use_amp):
                     out = self.model(cqt, mask=mask.bool())
@@ -184,6 +200,10 @@ class Trainer:
                     loss_qual = self.loss_fns["quality"](out["quality"].transpose(1, 2), qual)
                     loss_bass = self.loss_fns["bass"](out["bass"].transpose(1, 2), bass)
                     loss = loss_root + loss_qual + loss_bass
+
+                #skip NaN losses
+                if torch.isnan(loss):
+                    continue
 
                 total_loss += loss.item()
                 n_batches += 1
