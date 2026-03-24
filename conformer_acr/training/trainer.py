@@ -132,15 +132,15 @@ class Trainer:
             bass = batch["bass"].to(self.device)
             qual = batch["qual"].to(self.device)
 
-            #create padding mask from lengths
+            #create padding mask from lengths (bool to avoid AMP dtype issues)
             max_len = cqt.size(1)
-            mask = torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)
+            mask = (torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)).bool()
 
             self.optimizer.zero_grad()
 
             #AMP: autocast forward pass to FP16
             with autocast(enabled=self.use_amp):
-                out = self.model(cqt, mask=mask)
+                out = self.model(cqt, mask=mask.bool())
 
                 #compute loss for each head and sum
                 loss_root = self.loss_fn(out["root"].transpose(1, 2), root)
@@ -171,13 +171,13 @@ class Trainer:
                 bass = batch["bass"].to(self.device)
                 qual = batch["qual"].to(self.device)
 
-                #create padding mask from lengths
+                #create padding mask from lengths (bool to avoid AMP dtype issues)
                 max_len = cqt.size(1)
-                mask = torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)
+                mask = (torch.arange(max_len, device=self.device).unsqueeze(0) >= lengths.unsqueeze(1)).bool()
 
                 #AMP: autocast inference
                 with autocast(enabled=self.use_amp):
-                    out = self.model(cqt, mask=mask)
+                    out = self.model(cqt, mask=mask.bool())
 
                     #compute loss for each head and sum
                     loss_root = self.loss_fn(out["root"].transpose(1, 2), root)
