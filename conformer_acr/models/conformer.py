@@ -66,6 +66,7 @@ class ConformerACR(nn.Module):
             nhead=n_heads,
             dropout=dropout,
             batch_first=True,
+            norm_first=True,  #pre-LN: avoids PyTorch 1.12 fast path bugs
         )
         self.encoder = nn.TransformerEncoder(
             encoder_layer,
