@@ -256,6 +256,8 @@ def main():
                         help="Learning rate")
     parser.add_argument("--num-workers", type=int, default=4,
                         help="Number of data loading workers per GPU")
+    parser.add_argument("--max-seq-len", type=int, default=2048,
+                        help="Max sequence length (truncate longer to avoid OOM)")
     parser.add_argument("--resume", type=str, default=None,
                         help="Path to checkpoint to resume training from")
     args = parser.parse_args()
@@ -338,6 +340,7 @@ def main():
         index_file=args.index_file,
         audio_dir=args.data_dir,
         vocab_mapper=vocab_mapper,
+        max_seq_len=args.max_seq_len,
     )
 
     #use DistributedSampler for DDP (drop_last avoids uneven batch hangs)
@@ -363,6 +366,8 @@ def main():
             index_file=args.val_index_file,
             audio_dir=args.data_dir,
             vocab_mapper=vocab_mapper,
+            max_seq_len=args.max_seq_len,
+            random_crop=False,  #center crop for stable val metrics
         )
         val_sampler = DistributedSampler(val_dataset, shuffle=False, drop_last=True) if use_ddp else None
         val_loader = DataLoader(

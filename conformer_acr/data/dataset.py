@@ -112,10 +112,12 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
         ``(root, quality, bass)`` integer indices.
     """
 
-    def __init__(self, index_file: str, audio_dir: str, vocab_mapper) -> None:
+    def __init__(self, index_file: str, audio_dir: str, vocab_mapper, max_seq_len: int = 2048, random_crop: bool = True) -> None:
         self.audio_dir = audio_dir
         self.metadata = pd.read_csv(index_file)
         self.vocab_mapper = vocab_mapper
+        self.max_seq_len = max_seq_len  #truncate long sequences to avoid OOM
+        self.random_crop = random_crop  #False for val = deterministic center crop
 
     def __len__(self) -> int:
         return len(self.metadata)
@@ -173,6 +175,20 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
             root_labels[start_frame:end_frame] = root_idx
             qual_labels[start_frame:end_frame] = qual_idx
             bass_labels[start_frame:end_frame] = bass_idx
+
+        #crop long sequences to avoid OOM in attention
+        if self.max_seq_len and time_frames > self.max_seq_len:
+            if self.random_crop:
+                import random
+                start = random.randint(0, time_frames - self.max_seq_len)
+            else:
+                #center crop for validation (deterministic)
+                start = (time_frames - self.max_seq_len) // 2
+            end = start + self.max_seq_len
+            cqt_tensor = cqt_tensor[start:end]
+            root_labels = root_labels[start:end]
+            bass_labels = bass_labels[start:end]
+            qual_labels = qual_labels[start:end]
 
         return cqt_tensor, root_labels, bass_labels, qual_labels
 
