@@ -60,8 +60,8 @@ class Trainer:
         self.rank = rank
         self.use_ddp = use_ddp
 
-        #AMP: mixed precision for ~2x speedup on V100 tensor cores
-        self.use_amp = self.device.type == "cuda"
+        #AMP disabled: PyTorch 1.12 transformer has dtype bugs with autocast
+        self.use_amp = False
         self.scaler = GradScaler(enabled=self.use_amp)
 
     def fit(
