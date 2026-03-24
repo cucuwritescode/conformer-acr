@@ -71,13 +71,12 @@ class FocalLoss(nn.Module):
         pt = torch.exp(-ce_loss)
         focal_loss = self.alpha * (1.0 - pt) ** self.gamma * ce_loss
 
-        #mask out ignored indices for proper reduction
-        if self.ignore_index >= 0:
-            mask = targets != self.ignore_index
-            focal_loss = focal_loss[mask]
-
         if self.reduction == "mean":
-            return focal_loss.mean() if focal_loss.numel() > 0 else focal_loss.sum()
+            #for ignored indices, ce_loss=0 so focal_loss=0, but we need proper averaging
+            if self.ignore_index >= 0:
+                mask = (targets != self.ignore_index).float()
+                return focal_loss.sum() / mask.sum().clamp(min=1)
+            return focal_loss.mean()
         elif self.reduction == "sum":
             return focal_loss.sum()
         return focal_loss
