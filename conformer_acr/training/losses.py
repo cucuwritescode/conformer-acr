@@ -67,15 +67,18 @@ class FocalLoss(nn.Module):
         Tensor
             Scalar loss (or per-sample if ``reduction='none'``).
         """
+        #use cross_entropy's built-in ignore_index handling
         ce_loss = F.cross_entropy(inputs, targets, reduction="none", ignore_index=self.ignore_index)
-        pt = torch.exp(-ce_loss)
+        pt = torch.exp(-ce_loss.clamp(max=50))  #clamp to avoid exp overflow
         focal_loss = self.alpha * (1.0 - pt) ** self.gamma * ce_loss
 
         if self.reduction == "mean":
-            #for ignored indices, ce_loss=0 so focal_loss=0, but we need proper averaging
             if self.ignore_index >= 0:
-                mask = (targets != self.ignore_index).float()
-                return focal_loss.sum() / mask.sum().clamp(min=1)
+                valid = (targets != self.ignore_index)
+                n_valid = valid.sum()
+                if n_valid == 0:
+                    return focal_loss.new_zeros((), requires_grad=True)
+                return focal_loss.sum() / n_valid
             return focal_loss.mean()
         elif self.reduction == "sum":
             return focal_loss.sum()

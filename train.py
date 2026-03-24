@@ -320,9 +320,9 @@ def main():
     n_qual_idx = vocab_mapper.quality_to_idx['N']
     n_bass_idx = vocab_mapper.bass_to_idx['N']
     loss_fns = {
-        "root": FocalLoss(ignore_index=n_root_idx),
-        "quality": FocalLoss(ignore_index=n_qual_idx),
-        "bass": FocalLoss(ignore_index=n_bass_idx),
+        "root": torch.nn.CrossEntropyLoss(ignore_index=n_root_idx),
+        "quality": torch.nn.CrossEntropyLoss(ignore_index=n_qual_idx),
+        "bass": torch.nn.CrossEntropyLoss(ignore_index=n_bass_idx),
     }
     if rank == 0:
         print(f"Ignoring N class: root={n_root_idx}, quality={n_qual_idx}, bass={n_bass_idx}", flush=True)
