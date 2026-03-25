@@ -314,14 +314,14 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
-    #focal loss: gamma=2 down-weights easy examples, prevents mode collapse
+    #focal loss: gamma=5 for extreme class imbalance (maj13 is 60x more frequent than 7#9)
     loss_fns = {
-        "root": FocalLoss(gamma=2.0, ignore_index=-100),
-        "quality": FocalLoss(gamma=2.0, ignore_index=-100),
-        "bass": FocalLoss(gamma=2.0, ignore_index=-100),
+        "root": FocalLoss(gamma=5.0, ignore_index=-100),
+        "quality": FocalLoss(gamma=5.0, ignore_index=-100),
+        "bass": FocalLoss(gamma=5.0, ignore_index=-100),
     }
     if rank == 0:
-        print("Using FocalLoss (gamma=2.0) to handle class imbalance", flush=True)
+        print("Using FocalLoss (gamma=5.0) for extreme class imbalance", flush=True)
 
     #resume from checkpoint if specified
     start_epoch = 1
