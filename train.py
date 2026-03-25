@@ -314,14 +314,14 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
-    #loss functions ignore index -100 (padding AND N-class frames, set in dataset)
+    #focal loss: gamma=2 down-weights easy examples, prevents mode collapse
     loss_fns = {
-        "root": torch.nn.CrossEntropyLoss(ignore_index=-100),
-        "quality": torch.nn.CrossEntropyLoss(ignore_index=-100),
-        "bass": torch.nn.CrossEntropyLoss(ignore_index=-100),
+        "root": FocalLoss(gamma=2.0, ignore_index=-100),
+        "quality": FocalLoss(gamma=2.0, ignore_index=-100),
+        "bass": FocalLoss(gamma=2.0, ignore_index=-100),
     }
     if rank == 0:
-        print("Loss ignores padding (-100) and N-class frames", flush=True)
+        print("Using FocalLoss (gamma=2.0) to handle class imbalance", flush=True)
 
     #resume from checkpoint if specified
     start_epoch = 1
