@@ -92,10 +92,23 @@ def compute_class_weights(
     qual_weights = qual_counts.sum() / (len(qual_counts) * (qual_counts + eps))
     bass_weights = bass_counts.sum() / (len(bass_counts) * (bass_counts + eps))
 
-    #normalize so mean weight = 1
-    root_weights = root_weights / root_weights.mean()
-    qual_weights = qual_weights / qual_weights.mean()
-    bass_weights = bass_weights / bass_weights.mean()
+    #normalise so mean weight = 1, but EXCLUDE classes with 0 counts (like N)
+    #otherwise the huge N weight deflates all other weights to near-zero
+    root_mask = root_counts > 0
+    qual_mask = qual_counts > 0
+    bass_mask = bass_counts > 0
+
+    if root_mask.sum() > 0:
+        root_weights[root_mask] = root_weights[root_mask] / root_weights[root_mask].mean()
+    root_weights[~root_mask] = 0.0  #zero out N class weight (ignored anyway)
+
+    if qual_mask.sum() > 0:
+        qual_weights[qual_mask] = qual_weights[qual_mask] / qual_weights[qual_mask].mean()
+    qual_weights[~qual_mask] = 0.0
+
+    if bass_mask.sum() > 0:
+        bass_weights[bass_mask] = bass_weights[bass_mask] / bass_weights[bass_mask].mean()
+    bass_weights[~bass_mask] = 0.0
 
     if rank == 0:
         print(f"  Quality weights: {dict(zip(vocab_mapper.qualities, qual_weights.round(2)))}", flush=True)

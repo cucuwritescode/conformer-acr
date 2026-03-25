@@ -57,9 +57,9 @@ class FocalLoss(nn.Module):
 
         Parameters
         ----------
-        inputs : Tensor, shape ``(N, C)``
+        inputs : Tensor, shape ``(N, C)`` or ``(N, C, T)``
             Raw logits (pre-softmax).
-        targets : Tensor, shape ``(N,)``
+        targets : Tensor, shape ``(N,)`` or ``(N, T)``
             Ground-truth class indices.
 
         Returns
@@ -67,21 +67,42 @@ class FocalLoss(nn.Module):
         Tensor
             Scalar loss (or per-sample if ``reduction='none'``).
         """
-        #cross_entropy with per-class weights
-        ce_loss = F.cross_entropy(
-            inputs, targets, weight=self.weight, reduction="none", ignore_index=self.ignore_index
-        )
-        pt = torch.exp(-ce_loss.clamp(max=50))  #clamp to avoid exp overflow
-        focal_loss = (1.0 - pt) ** self.gamma * ce_loss
+        #BUG FIX: old code computed pt = exp(-weighted_ce) = p^weight, not p
+        #this broke focal modulation when combined with class weights
+
+        #get pt from unweighted log-softmax (the actual probability)
+        if inputs.dim() == 3:
+            #(N, C, T) case: log_softmax along class dim
+            log_probs = F.log_softmax(inputs, dim=1)
+            log_pt = log_probs.gather(1, targets.unsqueeze(1).clamp(min=0)).squeeze(1)
+        else:
+            #(N, C) standard case
+            log_probs = F.log_softmax(inputs, dim=1)
+            log_pt = log_probs.gather(1, targets.unsqueeze(1).clamp(min=0)).squeeze(1)
+
+        pt = log_pt.exp()
+        ce_loss = -log_pt  #unweighted cross-entropy
+
+        #focal modulation: down-weight easy examples
+        focal_weight = (1.0 - pt) ** self.gamma
+
+        #apply class weights separately (not baked into pt)
+        if self.weight is not None:
+            weight_targets = targets.clamp(min=0, max=self.weight.size(0) - 1)
+            alpha = self.weight[weight_targets]
+            focal_loss = alpha * focal_weight * ce_loss
+        else:
+            focal_loss = focal_weight * ce_loss
+
+        #mask out ignored indices (padding and N class use -100)
+        valid = (targets >= 0)
+        focal_loss = focal_loss * valid.float()
 
         if self.reduction == "mean":
-            if self.ignore_index >= 0:
-                valid = (targets != self.ignore_index)
-                n_valid = valid.sum()
-                if n_valid == 0:
-                    return focal_loss.new_zeros((), requires_grad=True)
-                return focal_loss.sum() / n_valid
-            return focal_loss.mean()
+            n_valid = valid.sum()
+            if n_valid == 0:
+                return focal_loss.new_zeros((), requires_grad=True)
+            return focal_loss.sum() / n_valid
         elif self.reduction == "sum":
             return focal_loss.sum()
         return focal_loss
