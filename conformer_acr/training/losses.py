@@ -26,8 +26,8 @@ class FocalLoss(nn.Module):
 
     Parameters
     ----------
-    alpha : float
-        Balancing factor (default: ``1.0``).
+    weight : Tensor, optional
+        Per-class weights of shape ``(num_classes,)``. Use inverse frequency.
     gamma : float
         Focusing parameter — higher values increase the effect
         (default: ``2.0``).
@@ -37,13 +37,13 @@ class FocalLoss(nn.Module):
 
     def __init__(
         self,
-        alpha: float = 1.0,
+        weight: torch.Tensor | None = None,
         gamma: float = 2.0,
         reduction: str = "mean",
         ignore_index: int = -100,
     ) -> None:
         super().__init__()
-        self.alpha = alpha
+        self.register_buffer("weight", weight)
         self.gamma = gamma
         self.reduction = reduction
         self.ignore_index = ignore_index
@@ -67,10 +67,12 @@ class FocalLoss(nn.Module):
         Tensor
             Scalar loss (or per-sample if ``reduction='none'``).
         """
-        #use cross_entropy's built-in ignore_index handling
-        ce_loss = F.cross_entropy(inputs, targets, reduction="none", ignore_index=self.ignore_index)
+        #cross_entropy with per-class weights
+        ce_loss = F.cross_entropy(
+            inputs, targets, weight=self.weight, reduction="none", ignore_index=self.ignore_index
+        )
         pt = torch.exp(-ce_loss.clamp(max=50))  #clamp to avoid exp overflow
-        focal_loss = self.alpha * (1.0 - pt) ** self.gamma * ce_loss
+        focal_loss = (1.0 - pt) ** self.gamma * ce_loss
 
         if self.reduction == "mean":
             if self.ignore_index >= 0:

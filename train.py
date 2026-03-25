@@ -22,10 +22,98 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
+import numpy as np
 from conformer_acr.models.conformer import ConformerACR
 from conformer_acr.training.trainer import Trainer
 from conformer_acr.training.losses import FocalLoss
 from conformer_acr.data.dataset import AAMDataset, pad_collate_fn, load_labels
+
+
+def compute_class_weights(
+    index_file: str,
+    data_dir: str,
+    vocab_mapper,
+    rank: int = 0,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """compute inverse frequency weights for each class to handle imbalance.
+
+    returns (root_weights, quality_weights, bass_weights) tensors.
+    """
+    cache_path = os.path.join(data_dir, "class_weights_cache.json")
+
+    if os.path.exists(cache_path):
+        if rank == 0:
+            print(f"Loading class weights from cache: {cache_path}", flush=True)
+        with open(cache_path, 'r') as f:
+            cache = json.load(f)
+        root_weights = torch.tensor(cache["root"], dtype=torch.float32)
+        qual_weights = torch.tensor(cache["quality"], dtype=torch.float32)
+        bass_weights = torch.tensor(cache["bass"], dtype=torch.float32)
+        return root_weights, qual_weights, bass_weights
+
+    if rank == 0:
+        print("Computing class weights from training data...", flush=True)
+
+    #count frames per class
+    root_counts = np.zeros(vocab_mapper.num_roots, dtype=np.float64)
+    qual_counts = np.zeros(vocab_mapper.num_qualities, dtype=np.float64)
+    bass_counts = np.zeros(vocab_mapper.num_bass, dtype=np.float64)
+
+    metadata = pd.read_csv(index_file)
+    from conformer_acr.config import SR, HOP_LENGTH
+    frame_duration = HOP_LENGTH / SR
+
+    for _, row in metadata.iterrows():
+        label_path = os.path.join(data_dir, row["label_file"])
+        if not os.path.exists(label_path):
+            continue
+        label_df = load_labels(label_path)
+
+        for _, label_row in label_df.iterrows():
+            start_time = float(label_row['start_time'])
+            end_time = float(label_row['end_time'])
+            chord_str = str(label_row['chord'])
+
+            n_frames = max(1, int((end_time - start_time) / frame_duration))
+            root_idx, qual_idx, bass_idx = vocab_mapper.parse_chord(chord_str)
+
+            #skip N class (will be ignored in loss anyway)
+            n_root = vocab_mapper.root_to_idx.get('N', -1)
+            n_qual = vocab_mapper.quality_to_idx.get('N', -1)
+            if root_idx != n_root:
+                root_counts[root_idx] += n_frames
+                qual_counts[qual_idx] += n_frames
+                bass_counts[bass_idx] += n_frames
+
+    #inverse frequency weights: weight = total / (num_classes * count)
+    #add small epsilon to avoid division by zero
+    eps = 1.0
+    root_weights = root_counts.sum() / (len(root_counts) * (root_counts + eps))
+    qual_weights = qual_counts.sum() / (len(qual_counts) * (qual_counts + eps))
+    bass_weights = bass_counts.sum() / (len(bass_counts) * (bass_counts + eps))
+
+    #normalize so mean weight = 1
+    root_weights = root_weights / root_weights.mean()
+    qual_weights = qual_weights / qual_weights.mean()
+    bass_weights = bass_weights / bass_weights.mean()
+
+    if rank == 0:
+        print(f"  Quality weights: {dict(zip(vocab_mapper.qualities, qual_weights.round(2)))}", flush=True)
+
+    #cache for next run
+    cache = {
+        "root": root_weights.tolist(),
+        "quality": qual_weights.tolist(),
+        "bass": bass_weights.tolist(),
+    }
+    with open(cache_path, 'w') as f:
+        json.dump(cache, f, indent=2)
+
+    return (
+        torch.tensor(root_weights, dtype=torch.float32),
+        torch.tensor(qual_weights, dtype=torch.float32),
+        torch.tensor(bass_weights, dtype=torch.float32),
+    )
 
 
 # ============================================================================
@@ -314,14 +402,25 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
-    #focal loss: gamma=5 for extreme class imbalance (maj13 is 60x more frequent than 7#9)
+    #compute inverse frequency weights to handle 60:1 class imbalance
+    root_weights, qual_weights, bass_weights = compute_class_weights(
+        index_file=args.index_file,
+        data_dir=args.data_dir,
+        vocab_mapper=vocab_mapper,
+        rank=rank,
+    )
+    root_weights = root_weights.to(device)
+    qual_weights = qual_weights.to(device)
+    bass_weights = bass_weights.to(device)
+
+    #weighted focal loss: class weights + gamma focusing
     loss_fns = {
-        "root": FocalLoss(gamma=5.0, ignore_index=-100),
-        "quality": FocalLoss(gamma=5.0, ignore_index=-100),
-        "bass": FocalLoss(gamma=5.0, ignore_index=-100),
+        "root": FocalLoss(weight=root_weights, gamma=2.0, ignore_index=-100),
+        "quality": FocalLoss(weight=qual_weights, gamma=2.0, ignore_index=-100),
+        "bass": FocalLoss(weight=bass_weights, gamma=2.0, ignore_index=-100),
     }
     if rank == 0:
-        print("Using FocalLoss (gamma=5.0) for extreme class imbalance", flush=True)
+        print("Using weighted FocalLoss (gamma=2.0 + inverse freq weights)", flush=True)
 
     #resume from checkpoint if specified
     start_epoch = 1
