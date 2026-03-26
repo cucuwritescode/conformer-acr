@@ -99,7 +99,7 @@ def test_real_data_predictions(model, dataset, vocab_mapper, num_samples=5):
     with torch.no_grad():
         for i in range(min(num_samples, len(dataset))):
             cqt, root_labels, bass_labels, qual_labels = dataset[i]
-            cqt = cqt.unsqueeze(0)  # add batch dim
+            cqt = cqt.unsqueeze(0).float()  # add batch dim, ensure float32
 
             out = model(cqt)
 
@@ -187,7 +187,7 @@ def test_prediction_distribution(model, dataset, num_samples=100):
     with torch.no_grad():
         for i in range(min(num_samples, len(dataset))):
             cqt, root_labels, bass_labels, qual_labels = dataset[i]
-            cqt = cqt.unsqueeze(0)
+            cqt = cqt.unsqueeze(0).float()  # ensure float32
             out = model(cqt)
 
             # get all frame predictions
