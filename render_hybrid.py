@@ -48,45 +48,55 @@ def _fluid_render(midi_path: str, out_wav: str) -> bool:
         return False
 
 
-def process_track(midi_file: str, output_dir: str, input_base_dir: str) -> None:
+def process_track_dir(track_dir: str, output_dir: str, split_name: str) -> None:
     """
-    Process a single MIDI file: render to audio and extract CQT.
+    Process a track directory: combine all stem MIDIs, render to audio, extract CQT.
 
     Parameters
     ----------
-    midi_file : str
-        Path to input MIDI file.
+    track_dir : str
+        Path to track directory (e.g., .../train/Track00001/)
     output_dir : str
         Directory to save output .flac and .pt files.
-    input_base_dir : str
-        Base directory for calculating relative paths.
+    split_name : str
+        Split name (train/test/validation/omitted) for output filename.
     """
-    #generate safe unique filename like 'train_Track01886_MIDI_S07'
-    #so stems from different tracks don't overwrite each other
-    rel_path = os.path.relpath(midi_file, input_base_dir)
-    track_name = rel_path.replace(os.sep, '_').replace('.mid', '')
-    flac_out = os.path.join(output_dir, f"{track_name}_mix.flac")
-    cqt_out = os.path.join(output_dir, f"{track_name}_cqt.pt")
-    label_out = os.path.join(output_dir, f"{track_name}_labels.csv")
+    track_name = os.path.basename(track_dir)
+    out_name = f"{split_name}_{track_name}"
+    flac_out = os.path.join(output_dir, f"{out_name}_mix.flac")
+    cqt_out = os.path.join(output_dir, f"{out_name}_cqt.pt")
+    label_out = os.path.join(output_dir, f"{out_name}_labels.csv")
 
     #skip if already processed
     if os.path.exists(cqt_out) and os.path.exists(label_out):
         return
 
     try:
-        midi_data = pretty_midi.PrettyMIDI(midi_file)
+        #find all stem MIDI files in this track
+        midi_dir = os.path.join(track_dir, "MIDI")
+        if not os.path.exists(midi_dir):
+            return
 
-        #generate ground truth labels from midi
-        with open(label_out, 'w') as f:
-            f.write("start_time,end_time,chord\n")
+        stem_files = sorted(glob.glob(os.path.join(midi_dir, "S*.mid")))
+        if not stem_files:
+            return
 
-            #pool all polyphonic notes to extract the full harmonic context
-            all_notes = []
-            for inst in midi_data.instruments:
+        #combine all stems into one PrettyMIDI object
+        combined_midi = pretty_midi.PrettyMIDI()
+        all_notes = []
+
+        for stem_file in stem_files:
+            stem_midi = pretty_midi.PrettyMIDI(stem_file)
+            for inst in stem_midi.instruments:
+                combined_midi.instruments.append(inst)
                 if not inst.is_drum:
                     all_notes.extend(inst.notes)
 
-            duration = midi_data.get_end_time()
+        #generate ground truth labels from combined midi
+        with open(label_out, 'w') as f:
+            f.write("start_time,end_time,chord\n")
+
+            duration = combined_midi.get_end_time()
             hop = 0.5  #0.5 second resolution for chord boundaries
 
             for start_t in np.arange(0, duration, hop):
@@ -145,23 +155,16 @@ def process_track(midi_file: str, output_dir: str, input_base_dir: str) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             stem_arrays = []
 
-            for i, inst in enumerate(midi_data.instruments):
-                if len(inst.notes) == 0:
-                    continue
-
-                #create single-instrument midi
-                stem_midi = pretty_midi.PrettyMIDI()
-                stem_midi.instruments.append(inst)
-                tmp_mid = os.path.join(tmpdir, f"stem_{i}.mid")
+            #render each stem MIDI file (S00.mid, S01.mid, etc.)
+            for i, stem_file in enumerate(stem_files):
                 tmp_wav = os.path.join(tmpdir, f"stem_{i}.wav")
-                stem_midi.write(tmp_mid)
-
-                _fluid_render(tmp_mid, tmp_wav)
+                _fluid_render(stem_file, tmp_wav)
 
                 #load rendered audio
                 if os.path.exists(tmp_wav):
                     y, _ = librosa.load(tmp_wav, sr=SR)
-                    stem_arrays.append(y)
+                    if np.abs(y).max() > 1e-6:  #skip silent stems
+                        stem_arrays.append(y)
 
             if not stem_arrays:
                 return
@@ -189,7 +192,7 @@ def process_track(midi_file: str, output_dir: str, input_base_dir: str) -> None:
             torch.save(torch.tensor(C_db).T, cqt_out)
 
     except Exception as e:
-        print(f"Error {track_name}: {e}", flush=True)
+        print(f"Error {out_name}: {e}", flush=True)
 
 
 # ============================================================================
@@ -197,17 +200,27 @@ def process_track(midi_file: str, output_dir: str, input_base_dir: str) -> None:
 # ============================================================================
 
 if __name__ == "__main__":
-    MUTATED_MIDI_DIR = "/nobackup/projects/bdyrk27/slakh_workspace/slakh_mutated"
-    OUTPUT_AUDIO_DIR = "/nobackup/projects/bdyrk27/slakh_workspace/slakh_audio"
+    #use the RAW slakh dataset (not mutated stems)
+    SLAKH_RAW_DIR = "/nobackup/projects/bdyrk27/slakh_workspace/slakh_raw/slakh2100_flac_redux"
+    OUTPUT_AUDIO_DIR = "/nobackup/projects/bdyrk27/slakh_workspace/slakh_audio_v2"
 
     os.makedirs(OUTPUT_AUDIO_DIR, exist_ok=True)
 
-    midi_files = glob.glob(os.path.join(MUTATED_MIDI_DIR, "**", "*.mid"), recursive=True)
-    print(f"Found {len(midi_files)} MIDI files to process", flush=True)
+    #collect all track directories across splits
+    track_jobs = []
+    for split in ["train", "test", "validation", "omitted"]:
+        split_dir = os.path.join(SLAKH_RAW_DIR, split)
+        if os.path.exists(split_dir):
+            for track_name in os.listdir(split_dir):
+                track_dir = os.path.join(split_dir, track_name)
+                if os.path.isdir(track_dir):
+                    track_jobs.append((track_dir, split))
 
-    #pass MUTATED_MIDI_DIR so process_track can calculate relative paths
+    print(f"Found {len(track_jobs)} tracks to process", flush=True)
+
     Parallel(n_jobs=N_CORES, verbose=10)(
-        delayed(process_track)(f, OUTPUT_AUDIO_DIR, MUTATED_MIDI_DIR) for f in midi_files
+        delayed(process_track_dir)(track_dir, OUTPUT_AUDIO_DIR, split)
+        for track_dir, split in track_jobs
     )
 
     print("Rendering complete.", flush=True)
