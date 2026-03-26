@@ -82,6 +82,89 @@ def test_logit_distribution(model):
             print()
 
 
+def test_cqt_statistics(dataset, num_samples=10):
+    """compare real CQT stats with random noise"""
+    print("\n" + "="*60)
+    print("TEST 0: CQT Data Statistics")
+    print("="*60)
+    print("Comparing real CQT features with random noise.\n")
+
+    all_means = []
+    all_stds = []
+    all_mins = []
+    all_maxs = []
+
+    for i in range(min(num_samples, len(dataset))):
+        cqt, _, _, _ = dataset[i]
+        all_means.append(cqt.mean().item())
+        all_stds.append(cqt.std().item())
+        all_mins.append(cqt.min().item())
+        all_maxs.append(cqt.max().item())
+
+    print(f"Real CQT data ({num_samples} samples):")
+    print(f"  Mean of means: {np.mean(all_means):.4f}")
+    print(f"  Mean of stds:  {np.mean(all_stds):.4f}")
+    print(f"  Min value:     {np.min(all_mins):.4f}")
+    print(f"  Max value:     {np.max(all_maxs):.4f}")
+
+    print(f"\nRandom noise (for comparison):")
+    rand = torch.randn(100, 252)
+    print(f"  Mean: {rand.mean():.4f}")
+    print(f"  Std:  {rand.std():.4f}")
+    print(f"  Min:  {rand.min():.4f}")
+    print(f"  Max:  {rand.max():.4f}")
+
+    # check if CQT is normalized
+    mean_of_means = np.mean(all_means)
+    mean_of_stds = np.mean(all_stds)
+
+    if abs(mean_of_means) > 1.0:
+        print(f"\nWARNING: CQT mean ({mean_of_means:.2f}) is far from 0!")
+        print("  Model trained on unnormalized data behaves differently on normalized random input.")
+    if mean_of_stds < 0.5 or mean_of_stds > 2.0:
+        print(f"\nWARNING: CQT std ({mean_of_stds:.2f}) differs significantly from 1.0!")
+
+
+def test_real_vs_random_logits(model, dataset):
+    """compare logit distributions between real CQT and random noise"""
+    print("\n" + "="*60)
+    print("TEST 2B: Real CQT vs Random Noise Logits")
+    print("="*60)
+
+    model.eval()
+    with torch.no_grad():
+        # get a real sample
+        cqt_real, _, _, _ = dataset[0]
+        cqt_real = cqt_real.unsqueeze(0).float()
+
+        # random noise with same shape
+        cqt_rand = torch.randn_like(cqt_real)
+
+        out_real = model(cqt_real)
+        out_rand = model(cqt_rand)
+
+        print("\nQuality logits (first frame):")
+        print(f"  Real CQT:  {out_real['quality'][0,0,:].numpy().round(2)}")
+        print(f"  Random:    {out_rand['quality'][0,0,:].numpy().round(2)}")
+        print(f"  Real argmax: {out_real['quality'][0,0,:].argmax().item()}")
+        print(f"  Rand argmax: {out_rand['quality'][0,0,:].argmax().item()}")
+
+        print("\nRoot logits (first frame):")
+        print(f"  Real CQT:  {out_real['root'][0,0,:].numpy().round(2)}")
+        print(f"  Random:    {out_rand['root'][0,0,:].numpy().round(2)}")
+        print(f"  Real argmax: {out_real['root'][0,0,:].argmax().item()}")
+        print(f"  Rand argmax: {out_rand['root'][0,0,:].argmax().item()}")
+
+        # check max logit magnitude
+        real_max = out_real['quality'][0,0,:].max().item()
+        rand_max = out_rand['quality'][0,0,:].max().item()
+        print(f"\nMax quality logit - Real: {real_max:.2f}, Random: {rand_max:.2f}")
+
+        if real_max > rand_max + 5:
+            print("WARNING: Model is much more confident on real data!")
+            print("  This suggests it learned a spurious pattern in CQT features.")
+
+
 def test_real_data_predictions(model, dataset, vocab_mapper, num_samples=5):
     """check predictions on actual data samples"""
     print("\n" + "="*60)
@@ -277,10 +360,12 @@ def main():
     print(f"Dataset: {len(dataset)} samples")
 
     # run tests
+    test_cqt_statistics(dataset, num_samples=10)
     test_random_inputs(model)
     test_logit_distribution(model)
     test_gradient_flow(model)
     test_weight_statistics(model)
+    test_real_vs_random_logits(model, dataset)
     test_real_data_predictions(model, dataset, vocab_mapper, num_samples=10)
     test_prediction_distribution(model, dataset, num_samples=100)
 
