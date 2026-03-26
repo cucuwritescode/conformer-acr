@@ -190,14 +190,48 @@ class AAMDataset(Dataset):  #type: ignore[type-arg]
                 bass_labels[bass_labels == n_bass] = -100
 
         #crop long sequences to avoid OOM in attention
+        #IMPORTANT: crop from NON-SILENT regions only (CQT files are ~99% silence)
         if self.max_seq_len and time_frames > self.max_seq_len:
-            if self.random_crop:
-                import random
-                start = random.randint(0, time_frames - self.max_seq_len)
+            #find non-silent frames (where CQT has variance across freq bins)
+            frame_stds = cqt_tensor.std(dim=1)
+            non_silent_mask = frame_stds > 0.1
+            non_silent_indices = torch.where(non_silent_mask)[0]
+
+            if len(non_silent_indices) >= self.max_seq_len:
+                #enough non-silent frames: crop from the non-silent region
+                first_valid = non_silent_indices[0].item()
+                last_valid = non_silent_indices[-1].item()
+                valid_range = last_valid - first_valid + 1
+
+                if valid_range >= self.max_seq_len:
+                    #crop within the valid region
+                    if self.random_crop:
+                        import random
+                        max_start = last_valid - self.max_seq_len + 1
+                        start = random.randint(first_valid, max(first_valid, max_start))
+                    else:
+                        #center of the valid region
+                        start = first_valid + (valid_range - self.max_seq_len) // 2
+                else:
+                    #valid region smaller than max_seq_len, use it all
+                    start = first_valid
+            elif len(non_silent_indices) > 0:
+                #some non-silent frames but less than max_seq_len: center on them
+                first_valid = non_silent_indices[0].item()
+                last_valid = non_silent_indices[-1].item()
+                center = (first_valid + last_valid) // 2
+                start = max(0, center - self.max_seq_len // 2)
             else:
-                #center crop for validation (deterministic)
-                start = (time_frames - self.max_seq_len) // 2
-            end = start + self.max_seq_len
+                #all silent (shouldn't happen): fallback to old behavior
+                if self.random_crop:
+                    import random
+                    start = random.randint(0, time_frames - self.max_seq_len)
+                else:
+                    start = (time_frames - self.max_seq_len) // 2
+
+            end = min(start + self.max_seq_len, time_frames)
+            start = max(0, end - self.max_seq_len)  #ensure we get full length
+
             cqt_tensor = cqt_tensor[start:end]
             root_labels = root_labels[start:end]
             bass_labels = bass_labels[start:end]
