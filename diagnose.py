@@ -183,6 +183,111 @@ def test_preprocess_function(data_dir, index_file):
         traceback.print_exc()
 
 
+def test_cqt_content_location(data_dir, index_file, num_files=5):
+    """find WHERE in the CQT files the actual content is (not silence)"""
+    print("\n" + "="*60)
+    print("TEST F: CQT Content Location Analysis")
+    print("="*60)
+    print("Finding where the non-silent portions are in each file.\n")
+
+    import pandas as pd
+    metadata = pd.read_csv(index_file)
+
+    for i, (_, row) in enumerate(metadata.iterrows()):
+        if i >= num_files:
+            break
+
+        audio_path = os.path.join(data_dir, row["audio_file"])
+        cqt_path = audio_path.replace('_mix.flac', '_cqt.pt').replace('.flac', '_cqt.pt')
+
+        if not os.path.exists(cqt_path):
+            print(f"File {i+1}: {os.path.basename(cqt_path)} - NOT FOUND")
+            continue
+
+        cqt = torch.load(cqt_path, map_location='cpu')
+        total_frames = cqt.shape[0]
+
+        # find non-silent frames (where std across freq bins > threshold)
+        frame_stds = cqt.std(dim=1)  # std per frame
+        non_silent_mask = frame_stds > 0.1
+        non_silent_frames = non_silent_mask.sum().item()
+        non_silent_pct = 100 * non_silent_frames / total_frames
+
+        # find first and last non-silent frame
+        non_silent_indices = torch.where(non_silent_mask)[0]
+        if len(non_silent_indices) > 0:
+            first_nonsilent = non_silent_indices[0].item()
+            last_nonsilent = non_silent_indices[-1].item()
+        else:
+            first_nonsilent = -1
+            last_nonsilent = -1
+
+        # what does center crop get?
+        center_start = (total_frames - 512) // 2 if total_frames > 512 else 0
+        center_end = center_start + min(512, total_frames)
+        center_crop = cqt[center_start:center_end]
+        center_std = center_crop.std().item()
+
+        print(f"File {i+1}: {os.path.basename(cqt_path)}")
+        print(f"  Total frames: {total_frames}")
+        print(f"  Non-silent frames: {non_silent_frames} ({non_silent_pct:.1f}%)")
+        print(f"  Non-silent range: frames {first_nonsilent} to {last_nonsilent}")
+        print(f"  Center crop (512 frames): {center_start}-{center_end}, std={center_std:.4f}")
+
+        if center_std < 0.1:
+            print(f"  *** CENTER CROP IS SILENT! Content is elsewhere in file. ***")
+        print()
+
+
+def test_dataset_vs_raw_file(data_dir, index_file, dataset):
+    """compare what Dataset returns vs raw file contents"""
+    print("\n" + "="*60)
+    print("TEST G: Dataset vs Raw File Comparison")
+    print("="*60)
+
+    import pandas as pd
+    metadata = pd.read_csv(index_file)
+    row = metadata.iloc[0]
+
+    audio_path = os.path.join(data_dir, row["audio_file"])
+    cqt_path = audio_path.replace('_mix.flac', '_cqt.pt').replace('.flac', '_cqt.pt')
+
+    print(f"Comparing: {os.path.basename(cqt_path)}\n")
+
+    # load raw file
+    if os.path.exists(cqt_path):
+        raw_cqt = torch.load(cqt_path, map_location='cpu')
+        print(f"Raw file:")
+        print(f"  Shape: {raw_cqt.shape}")
+        print(f"  Mean: {raw_cqt.mean().item():.4f}, Std: {raw_cqt.std().item():.4f}")
+        print(f"  Range: [{raw_cqt.min().item():.4f}, {raw_cqt.max().item():.4f}]")
+    else:
+        print(f"Raw file not found: {cqt_path}")
+        return
+
+    # load through dataset
+    dataset_cqt, _, _, _ = dataset[0]
+    print(f"\nDataset output:")
+    print(f"  Shape: {dataset_cqt.shape}")
+    print(f"  Mean: {dataset_cqt.mean().item():.4f}, Std: {dataset_cqt.std().item():.4f}")
+    print(f"  Range: [{dataset_cqt.min().item():.4f}, {dataset_cqt.max().item():.4f}]")
+
+    # check if center crop matches
+    total = raw_cqt.shape[0]
+    center_start = (total - 512) // 2 if total > 512 else 0
+    center_end = center_start + min(512, total)
+    center_crop = raw_cqt[center_start:center_end]
+
+    print(f"\nManual center crop of raw file:")
+    print(f"  Frames {center_start} to {center_end}")
+    print(f"  Mean: {center_crop.mean().item():.4f}, Std: {center_crop.std().item():.4f}")
+
+    if torch.allclose(dataset_cqt.double(), center_crop, atol=1e-5):
+        print("\n  Dataset output MATCHES manual center crop.")
+    else:
+        print("\n  Dataset output DIFFERS from manual center crop!")
+
+
 def test_label_distribution(dataset, num_samples=100):
     """check label distribution in the dataset"""
     print("\n" + "="*60)
@@ -570,6 +675,8 @@ def main():
     test_preprocess_function(args.data_dir, args.index_file)
     test_dataset_loading(dataset, num_samples=5)
     test_label_distribution(dataset, num_samples=100)
+    test_cqt_content_location(args.data_dir, args.index_file, num_files=5)
+    test_dataset_vs_raw_file(args.data_dir, args.index_file, dataset)
     test_cqt_statistics(dataset, num_samples=10)
 
     print("\n" + "#"*60)
